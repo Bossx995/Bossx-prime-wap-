@@ -1121,5 +1121,459 @@ Status: ${status}`;
             q.id
           );
 
-          if (
-            !q.message?.cha
+               !q.message?.chat?.id
+          ) {
+            return;
+          }
+
+          return bot.sendMessage(
+            q.message.chat.id,
+            `📋 LATEST PASSWORDS
+
+${listText}`
+          );
+        }
+
+        await bot.answerCallbackQuery(
+          q.id,
+          {
+            text:
+              'Unknown action',
+            show_alert:
+              true
+          }
+        );
+
+      } catch (error) {
+        console.error(
+          'Telegram callback error:',
+          error
+        );
+
+        try {
+          await bot.answerCallbackQuery(
+            q.id,
+            {
+              text:
+                'Something went wrong',
+              show_alert:
+                true
+            }
+          );
+        } catch {}
+      }
+    }
+  );
+
+  console.log(
+    'BOSS X PRIME Telegram bot started'
+  );
+}
+
+/* =========================
+   PUBLIC CONFIG
+========================= */
+
+app.get(
+  '/api/config',
+  (req, res) => {
+    res.json({
+      name:
+        'BOSS X PRIME',
+      extensionName:
+        'BOSS Premium Mic',
+      activationRequired:
+        true
+    });
+  }
+);
+
+/* =========================
+   ACTIVATION
+========================= */
+
+app.post(
+  '/api/activate',
+  async (req, res) => {
+    try {
+      const code =
+        String(
+          req.body.code || ''
+        )
+          .trim()
+          .toUpperCase();
+
+      const deviceId =
+        String(
+          req.body.deviceId || ''
+        )
+          .trim()
+          .slice(0, 120);
+
+      if (!code) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Enter your password'
+          });
+      }
+
+      if (!deviceId) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Device ID required'
+          });
+      }
+
+      let fixed = null;
+
+      if (
+        FIXED_PASSWORDS.oneDay &&
+        code ===
+          String(
+            FIXED_PASSWORDS.oneDay
+          )
+            .trim()
+            .toUpperCase()
+      ) {
+        fixed = {
+          duration_days: 1
+        };
+      }
+
+      if (
+        !fixed &&
+        FIXED_PASSWORDS.sixMonths &&
+        code ===
+          String(
+            FIXED_PASSWORDS.sixMonths
+          )
+            .trim()
+            .toUpperCase()
+      ) {
+        fixed = {
+          duration_days: 180
+        };
+      }
+
+      if (
+        !fixed &&
+        FIXED_PASSWORDS.unlimited &&
+        code ===
+          String(
+            FIXED_PASSWORDS.unlimited
+          )
+            .trim()
+            .toUpperCase()
+      ) {
+        fixed = {
+          duration_days: 0
+        };
+      }
+
+      let license =
+        await getLicense(code);
+
+      const isNewFixed =
+        !license &&
+        Boolean(fixed);
+
+      if (isNewFixed) {
+        license = {
+          code,
+          duration_days:
+            fixed.duration_days,
+          created_at:
+            new Date().toISOString(),
+          activated_at: null,
+          expires_at: null,
+          revoked_at: null,
+          device_id: null
+        };
+      }
+
+      if (!license) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Invalid password'
+          });
+      }
+
+      if (license.revoked_at) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'This password has been revoked'
+          });
+      }
+
+      const now =
+        new Date();
+
+      if (
+        license.expires_at &&
+        new Date(
+          license.expires_at
+        ) <= now
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'This password has expired'
+          });
+      }
+
+      if (!license.activated_at) {
+        license.activated_at =
+          now.toISOString();
+
+        license.expires_at =
+          license.duration_days === 0
+            ? null
+            : new Date(
+                now.getTime() +
+                  license.duration_days *
+                    86400000
+              ).toISOString();
+
+        license.device_id =
+          deviceId;
+
+        if (isNewFixed) {
+          await saveLicense(
+            license
+          );
+        } else {
+          await updateLicense(
+            license
+          );
+        }
+
+      } else if (
+        license.device_id &&
+        license.device_id !==
+          deviceId
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'This password is already activated on another device'
+          });
+      }
+
+      return res.json({
+        ok: true,
+        expiresAt:
+          license.expires_at,
+        plan:
+          planLabel(
+            license.duration_days
+          )
+      });
+
+    } catch (error) {
+      console.error(
+        'Activation error:',
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            'Activation service error'
+        });
+    }
+  }
+);
+
+/* =========================
+   ADMIN LOGIN
+========================= */
+
+app.post(
+  '/api/admin/login',
+  (req, res) => {
+    const user =
+      String(
+        req.body.username || ''
+      );
+
+    const pass =
+      String(
+        req.body.password || ''
+      );
+
+    if (
+      user !== ADMIN_USER ||
+      pass !== ADMIN_PASSWORD
+    ) {
+      return res
+        .status(401)
+        .json({
+          error:
+            'Invalid admin credentials'
+        });
+    }
+
+    const payload = {
+      u: user,
+      exp:
+        Date.now() +
+        12 *
+          60 *
+          60 *
+          1000
+    };
+
+    res.setHeader(
+      'Set-Cookie',
+      `boss_admin=${encodeURIComponent(
+        cookieValue(payload)
+      )}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`
+    );
+
+    return res.json({
+      ok: true
+    });
+  }
+);
+
+/* =========================
+   ADMIN LOGOUT
+========================= */
+
+app.post(
+  '/api/admin/logout',
+  adminRequired,
+  (req, res) => {
+    res.setHeader(
+      'Set-Cookie',
+      'boss_admin=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0'
+    );
+
+    res.json({
+      ok: true
+    });
+  }
+);
+
+/* =========================
+   ADMIN LICENSE LIST
+========================= */
+
+app.get(
+  '/api/admin/licenses',
+  adminRequired,
+  async (req, res) => {
+    try {
+      res.json(
+        await listLicenses()
+      );
+    } catch (error) {
+      console.error(
+        'List licenses error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Could not load licenses'
+        });
+    }
+  }
+);
+
+/* =========================
+   ADMIN CREATE LICENSE
+========================= */
+
+app.post(
+  '/api/admin/licenses',
+  adminRequired,
+  async (req, res) => {
+    try {
+      const duration =
+        Number(
+          req.body.durationDays
+        );
+
+      if (
+        ![1, 180, 0].includes(
+          duration
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Duration must be 1, 180 or 0'
+          });
+      }
+
+      const license =
+        await generateLicense(
+          duration
+        );
+
+      return res.json(
+        license
+      );
+
+    } catch (error) {
+      console.error(
+        'Create license error:',
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            'Could not create license'
+        });
+    }
+  }
+);
+
+/* =========================
+   START SERVER
+========================= */
+
+async function start() {
+  try {
+    await initDb();
+
+    app.listen(
+      PORT,
+      '0.0.0.0',
+      () => {
+        console.log(
+          `BOSS X PRIME site running on port ${PORT}`
+        );
+      }
+    );
+
+    startTelegramBot();
+
+  } catch (error) {
+    console.error(
+      'Server startup error:',
+      error
+    );
+
+    process.exit(1);
+  }
+}
+
+start();       
