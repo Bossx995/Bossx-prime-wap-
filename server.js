@@ -14,6 +14,13 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'change-this-password';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-session-secret';
+// Add your own activation passwords here if you want fixed passwords in the file.
+// Leave blank to use passwords generated from the Admin panel.
+const FIXED_PASSWORDS = {
+  oneDay: process.env.BOSS_1D_PASSWORD || '',
+  sixMonths: process.env.BOSS_6M_PASSWORD || '',
+  unlimited: process.env.BOSS_UNLIMITED_PASSWORD || ''
+};
 
 const pool = process.env.DATABASE_URL ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }) : null;
 const memory = { licenses: new Map(), sessions: new Map() };
@@ -34,7 +41,7 @@ async function initDb() {
 
 function hash(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 function makeCode(days) {
-  const tag = days === 1 ? '1D' : days === 90 ? '3M' : '6M';
+  const tag = days === 1 ? '1D' : days === 180 ? '6M' : 'UNL';
   const body = crypto.randomBytes(8).toString('hex').toUpperCase();
   return `BOSS-${tag}-${body}`;
 }
@@ -52,7 +59,7 @@ function adminRequired(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Admin login required' });
   const [raw, sig] = token.split('.');
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(raw || '').digest('base64url');
-  if (!raw || !sig || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return res.status(401).json({ error: 'Invalid admin session' });
+  if (!raw || !sig || sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return res.status(401).json({ error: 'Invalid admin session' });
   try { const data = JSON.parse(Buffer.from(raw, 'base64url').toString()); if (data.exp < Date.now()) throw new Error(); } catch { return res.status(401).json({ error: 'Admin session expired' }); }
   next();
 }
@@ -80,20 +87,26 @@ app.post('/api/activate', async (req,res)=>{
     const code = String(req.body.code || '').trim().toUpperCase();
     const deviceId = String(req.body.deviceId || '').trim().slice(0,120);
     if (!code) return res.status(400).json({error:'Enter your password'});
-    const l = await getLicense(code);
+    // Fixed passwords are optional; when supplied, they behave like normal licenses.
+    const fixed = code === String(FIXED_PASSWORDS.oneDay || '').trim().toUpperCase() ? {duration_days:1} :
+      code === String(FIXED_PASSWORDS.sixMonths || '').trim().toUpperCase() ? {duration_days:180} :
+      code === String(FIXED_PASSWORDS.unlimited || '').trim().toUpperCase() ? {duration_days:0} : null;
+    let l = await getLicense(code);
+    const isNewFixed = !l && !!fixed;
+    if (isNewFixed) l = {code,duration_days:fixed.duration_days,created_at:new Date().toISOString(),activated_at:null,expires_at:null,revoked_at:null,device_id:null};
     if (!l) return res.status(404).json({error:'Invalid password'});
     if (l.revoked_at) return res.status(403).json({error:'This password has been revoked'});
     const now = new Date();
     if (l.expires_at && new Date(l.expires_at) <= now) return res.status(403).json({error:'This password has expired'});
     if (!l.activated_at) {
       l.activated_at = now.toISOString();
-      l.expires_at = new Date(now.getTime() + l.duration_days*86400000).toISOString();
+      l.expires_at = l.duration_days===0 ? null : new Date(now.getTime() + l.duration_days*86400000).toISOString();
       l.device_id = deviceId || null;
-      await updateLicense(l);
+      if (isNewFixed) await saveLicense(l); else await updateLicense(l);
     } else if (l.device_id && deviceId && l.device_id !== deviceId) {
       return res.status(403).json({error:'This password is already activated on another device'});
     }
-    res.json({ok:true, expiresAt:l.expires_at, plan:l.duration_days===1?'1 Day':l.duration_days===90?'3 Months':'6 Months'});
+    res.json({ok:true, expiresAt:l.expires_at, plan:l.duration_days===0?'Unlimited':l.duration_days===1?'1 Day':'6 Months'});
   } catch(e) { res.status(500).json({error:'Activation service error'}); }
 });
 
@@ -108,7 +121,7 @@ app.post('/api/admin/logout',adminRequired,(req,res)=>{ res.setHeader('Set-Cooki
 app.get('/api/admin/licenses',adminRequired,async(req,res)=>res.json(await listLicenses()));
 app.post('/api/admin/licenses',adminRequired,async(req,res)=>{
   const duration=Number(req.body.durationDays);
-  if (![1,90,180].includes(duration)) return res.status(400).json({error:'Duration must be 1, 90 or 180 days'});
+  if (![1,180,0].includes(duration)) return res.status(400).json({error:'Duration must be 1, 180 or 0 (Unlimited)'});
   let code=makeCode(duration); while(await getLicense(code)) code=makeCode(duration);
   const l={code,duration_days:duration,created_at:new Date().toISOString(),activated_at:null,expires_at:null,revoked_at:null,device_id:null};
   await saveLicense(l); res.json(l);
