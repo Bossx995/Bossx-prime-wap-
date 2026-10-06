@@ -129,7 +129,10 @@ function startTelegramBot() {
         return bot.sendMessage(q.message.chat.id, `✅ *${label} selected.*\n\nPlease contact the admin for payment and your password.`, {parse_mode:'Markdown'});
       }
       if (action==='gen' && [1,180,0].includes(days)) {
-        if (!isAdmin(q.message)) return bot.answerCallbackQuery(q.id,{text:'Admin only',show_alert:true});
+        ```js
+if (!isAdmin({ from: q.from })) return bot.answerCallbackQuery(q.id,{text:'Admin only',show_alert:true});
+```
+        
         const l=await generateLicense(days);
         await bot.answerCallbackQuery(q.id,{text:'Password generated'});
         return bot.sendMessage(q.message.chat.id, `🔐 *New ${planLabel(days)} Password*\n\n\`${l.code}\`\n\n⏱️ Validity starts when the customer activates it.\n📱 Locked to the first device.`, {parse_mode:'Markdown'});
