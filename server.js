@@ -5,20 +5,41 @@ import { fileURLToPath } from 'url';
 import pg from 'pg';
 import TelegramBot from 'node-telegram-bot-api';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(
+  fileURLToPath(import.meta.url)
+);
 
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(
+  express.static(
+    path.join(__dirname, 'public')
+  )
+);
 
 const PORT = process.env.PORT || 3000;
 
-const ADMIN_USER = process.env.ADMIN_USER || '';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const SESSION_SECRET = process.env.SESSION_SECRET || '';
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+/* =========================
+   ENV
+========================= */
+
+const ADMIN_USER =
+  process.env.ADMIN_USER || '';
+
+const ADMIN_PASSWORD =
+  process.env.ADMIN_PASSWORD || '';
+
+const SESSION_SECRET =
+  process.env.SESSION_SECRET || '';
+
+const TELEGRAM_BOT_TOKEN =
+  process.env.TELEGRAM_BOT_TOKEN || '';
+
+/* =========================
+   TELEGRAM ADMINS
+========================= */
 
 const ADMIN_TELEGRAM_IDS = String(
   process.env.ADMIN_TELEGRAM_ID || ''
@@ -27,16 +48,41 @@ const ADMIN_TELEGRAM_IDS = String(
   .map(v => v.trim())
   .filter(Boolean);
 
+/*
+  Compatibility variable.
+  Prevents:
+  ADMIN_TELEGRAM_ID is not defined
+*/
+
+const ADMIN_TELEGRAM_ID =
+  ADMIN_TELEGRAM_IDS[0] || '';
+
+/* =========================
+   FIXED PASSWORDS
+========================= */
+
 const FIXED_PASSWORDS = {
-  oneDay: process.env.BOSS_1D_PASSWORD || '',
-  sixMonths: process.env.BOSS_6M_PASSWORD || '',
-  unlimited: process.env.BOSS_UNLIMITED_PASSWORD || ''
+  oneDay:
+    process.env.BOSS_1D_PASSWORD || '',
+
+  sixMonths:
+    process.env.BOSS_6M_PASSWORD || '',
+
+  unlimited:
+    process.env.BOSS_UNLIMITED_PASSWORD || ''
 };
+
+/* =========================
+   DATABASE
+========================= */
 
 const pool = process.env.DATABASE_URL
   ? new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      connectionString:
+        process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false
+      }
     })
   : null;
 
@@ -45,11 +91,17 @@ const memory = {
 };
 
 /* =========================
-   DATABASE
+   DATABASE INIT
 ========================= */
 
 async function initDb() {
-  if (!pool) return;
+  if (!pool) {
+    console.log(
+      'DATABASE_URL not found. Using memory storage.'
+    );
+
+    return;
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS licenses (
@@ -63,6 +115,10 @@ async function initDb() {
       device_id TEXT
     )
   `);
+
+  console.log(
+    'Database initialized'
+  );
 }
 
 /* =========================
@@ -84,8 +140,14 @@ function makeCode(days) {
 }
 
 function planLabel(days) {
-  if (days === 0) return 'Unlimited';
-  if (days === 1) return '1 Day';
+  if (days === 0) {
+    return 'Unlimited';
+  }
+
+  if (days === 1) {
+    return '1 Day';
+  }
+
   return '6 Months';
 }
 
@@ -99,7 +161,10 @@ function cookieValue(payload) {
     .toString('base64url');
 
   const sig = crypto
-    .createHmac('sha256', SESSION_SECRET)
+    .createHmac(
+      'sha256',
+      SESSION_SECRET
+    )
     .update(raw)
     .digest('base64url');
 
@@ -107,54 +172,84 @@ function cookieValue(payload) {
 }
 
 function readCookie(req, name) {
-  const cookies = Object.fromEntries(
-    (req.headers.cookie || '')
-      .split(';')
-      .filter(Boolean)
-      .map(v => {
-        const i = v.indexOf('=');
+  const cookies =
+    Object.fromEntries(
+      (req.headers.cookie || '')
+        .split(';')
+        .filter(Boolean)
+        .map(v => {
+          const i =
+            v.indexOf('=');
 
-        return [
-          v.slice(0, i).trim(),
-          decodeURIComponent(v.slice(i + 1))
-        ];
-      })
-  );
+          return [
+            v.slice(0, i).trim(),
+            decodeURIComponent(
+              v.slice(i + 1)
+            )
+          ];
+        })
+    );
 
   return cookies[name];
 }
 
 /* =========================
-   ADMIN WEB AUTH
+   WEB ADMIN AUTH
 ========================= */
 
-function adminRequired(req, res, next) {
-  const token = readCookie(req, 'boss_admin');
+function adminRequired(
+  req,
+  res,
+  next
+) {
+  const token =
+    readCookie(
+      req,
+      'boss_admin'
+    );
 
   if (!token) {
     return res
       .status(401)
-      .json({ error: 'Admin login required' });
+      .json({
+        error:
+          'Admin login required'
+      });
   }
 
-  const [raw, sig] = String(token).split('.');
+  const [
+    raw,
+    sig
+  ] =
+    String(token).split('.');
 
   if (!raw || !sig) {
     return res
       .status(401)
-      .json({ error: 'Invalid admin session' });
+      .json({
+        error:
+          'Invalid admin session'
+      });
   }
 
-  const expected = crypto
-    .createHmac('sha256', SESSION_SECRET)
-    .update(raw)
-    .digest('base64url');
+  const expected =
+    crypto
+      .createHmac(
+        'sha256',
+        SESSION_SECRET
+      )
+      .update(raw)
+      .digest('base64url');
 
-  const actualBuffer = Buffer.from(sig);
-  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer =
+    Buffer.from(sig);
+
+  const expectedBuffer =
+    Buffer.from(expected);
 
   if (
-    actualBuffer.length !== expectedBuffer.length ||
+    actualBuffer.length !==
+      expectedBuffer.length ||
     !crypto.timingSafeEqual(
       actualBuffer,
       expectedBuffer
@@ -162,26 +257,38 @@ function adminRequired(req, res, next) {
   ) {
     return res
       .status(401)
-      .json({ error: 'Invalid admin session' });
+      .json({
+        error:
+          'Invalid admin session'
+      });
   }
 
   try {
-    const data = JSON.parse(
-      Buffer
-        .from(raw, 'base64url')
-        .toString()
-    );
+    const data =
+      JSON.parse(
+        Buffer
+          .from(
+            raw,
+            'base64url'
+          )
+          .toString()
+      );
 
     if (
       data.exp < Date.now() ||
       data.u !== ADMIN_USER
     ) {
-      throw new Error('Expired or invalid session');
+      throw new Error(
+        'Expired or invalid session'
+      );
     }
   } catch {
     return res
       .status(401)
-      .json({ error: 'Admin session expired' });
+      .json({
+        error:
+          'Admin session expired'
+      });
   }
 
   next();
@@ -193,18 +300,26 @@ function adminRequired(req, res, next) {
 
 async function getLicense(code) {
   if (pool) {
-    const result = await pool.query(
-      'SELECT * FROM licenses WHERE code=$1',
-      [code]
-    );
+    const result =
+      await pool.query(
+        'SELECT * FROM licenses WHERE code=$1',
+        [code]
+      );
 
-    return result.rows[0] || null;
+    return (
+      result.rows[0] || null
+    );
   }
 
-  return memory.licenses.get(code) || null;
+  return (
+    memory.licenses.get(code) ||
+    null
+  );
 }
 
-async function saveLicense(license) {
+async function saveLicense(
+  license
+) {
   if (pool) {
     await pool.query(
       `
@@ -217,7 +332,9 @@ async function saveLicense(license) {
         revoked_at,
         device_id
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7
+      )
       `,
       [
         license.code,
@@ -239,7 +356,9 @@ async function saveLicense(license) {
   );
 }
 
-async function updateLicense(license) {
+async function updateLicense(
+  license
+) {
   if (pool) {
     await pool.query(
       `
@@ -271,46 +390,56 @@ async function updateLicense(license) {
 
 async function listLicenses() {
   if (pool) {
-    const result = await pool.query(
-      'SELECT * FROM licenses ORDER BY id DESC'
-    );
+    const result =
+      await pool.query(
+        'SELECT * FROM licenses ORDER BY id DESC'
+      );
 
     return result.rows;
   }
 
-  return [...memory.licenses.values()]
-    .sort(
-      (a, b) =>
-        new Date(b.created_at) -
-        new Date(a.created_at)
-    );
+  return [
+    ...memory.licenses.values()
+  ].sort(
+    (a, b) =>
+      new Date(b.created_at) -
+      new Date(a.created_at)
+  );
 }
 
-async function generateLicense(duration) {
+async function generateLicense(
+  duration
+) {
   let code;
 
   do {
-    code = makeCode(duration);
-  } while (await getLicense(code));
+    code =
+      makeCode(duration);
+  } while (
+    await getLicense(code)
+  );
 
   const license = {
     code,
     duration_days: duration,
-    created_at: new Date().toISOString(),
+    created_at:
+      new Date().toISOString(),
     activated_at: null,
     expires_at: null,
     revoked_at: null,
     device_id: null
   };
 
-  await saveLicense(license);
+  await saveLicense(
+    license
+  );
 
   return license;
 }
 
-/* =========================
+/* ==================================================
    TELEGRAM BOT
-========================= */
+================================================== */
 
 function startTelegramBot() {
   if (!TELEGRAM_BOT_TOKEN) {
@@ -321,27 +450,46 @@ function startTelegramBot() {
     return;
   }
 
-  const bot = new TelegramBot(
-    TELEGRAM_BOT_TOKEN,
-    {
-      polling: true
+  const bot =
+    new TelegramBot(
+      TELEGRAM_BOT_TOKEN,
+      {
+        polling: true
+      }
+    );
+
+  /* =========================
+     POLLING ERROR
+  ========================= */
+
+  bot.on(
+    'polling_error',
+    error => {
+      console.error(
+        'Telegram polling error:',
+        error?.message ||
+          error
+      );
     }
   );
 
   /* =========================
-     ADMIN CHECK - FIXED
+     ADMIN CHECK
   ========================= */
 
   const isAdmin = user => {
-    const id = String(
-      user?.from?.id ??
-      user?.id ??
-      ''
-    ).trim();
+    const id =
+      String(
+        user?.from?.id ??
+        user?.id ??
+        ''
+      ).trim();
 
     return (
       Boolean(id) &&
-      ADMIN_TELEGRAM_IDS.includes(id)
+      ADMIN_TELEGRAM_IDS.includes(
+        id
+      )
     );
   };
 
@@ -355,17 +503,20 @@ function startTelegramBot() {
         [
           {
             text: '💎 1 Day',
-            callback_data: 'buy:1'
+            callback_data:
+              'buy:1'
           },
           {
             text: '💎 6 Months',
-            callback_data: 'buy:180'
+            callback_data:
+              'buy:180'
           }
         ],
         [
           {
             text: '♾️ Unlimited',
-            callback_data: 'buy:0'
+            callback_data:
+              'buy:0'
           }
         ]
       ]
@@ -381,26 +532,34 @@ function startTelegramBot() {
       inline_keyboard: [
         [
           {
-            text: '🔑 Generate 1 Day',
-            callback_data: 'gen:1'
+            text:
+              '🔑 Generate 1 Day',
+            callback_data:
+              'gen:1'
           }
         ],
         [
           {
-            text: '🔑 Generate 6 Months',
-            callback_data: 'gen:180'
+            text:
+              '🔑 Generate 6 Months',
+            callback_data:
+              'gen:180'
           }
         ],
         [
           {
-            text: '🔑 Generate Unlimited',
-            callback_data: 'gen:0'
+            text:
+              '🔑 Generate Unlimited',
+            callback_data:
+              'gen:0'
           }
         ],
         [
           {
-            text: '📋 Password List',
-            callback_data: 'list:all'
+            text:
+              '📋 Password List',
+            callback_data:
+              'list:all'
           }
         ]
       ]
@@ -411,82 +570,384 @@ function startTelegramBot() {
      /start
   ========================= */
 
-  bot.onText(/^\/start$/, async msg => {
-    try {
-      await bot.sendMessage(
-        msg.chat.id,
-        `👑 *BOSS X PRIME*
+  bot.onText(
+    /^\/start$/,
+    async msg => {
+      try {
+        await bot.sendMessage(
+          msg.chat.id,
+          `👑 BOSS X PRIME
 
 Choose your plan.
 Contact the admin for payment and your password.`,
-        {
-          ...customerMenu,
-          parse_mode: 'Markdown'
-        }
-      );
-    } catch (error) {
-      console.error(
-        'Start command error:',
-        error
-      );
+          customerMenu
+        );
+      } catch (error) {
+        console.error(
+          'Start command error:',
+          error
+        );
+      }
     }
-  });
+  );
+
+  /* =========================
+     /plans
+  ========================= */
+
+  bot.onText(
+    /^\/plans$/,
+    async msg => {
+      try {
+        await bot.sendMessage(
+          msg.chat.id,
+          `💎 BOSS X PRIME
+
+Choose your plan:`,
+          customerMenu
+        );
+      } catch (error) {
+        console.error(
+          'Plans command error:',
+          error
+        );
+      }
+    }
+  );
+
+  /* =========================
+     /id
+  ========================= */
+
+  bot.onText(
+    /^\/id$/,
+    async msg => {
+      try {
+        const id =
+          String(
+            msg?.from?.id || ''
+          );
+
+        await bot.sendMessage(
+          msg.chat.id,
+          `🆔 Your Telegram ID:
+
+${id}`
+        );
+      } catch (error) {
+        console.error(
+          'ID command error:',
+          error
+        );
+      }
+    }
+  );
+
+  /* =========================
+     /help
+  ========================= */
+
+  bot.onText(
+    /^\/help$/,
+    async msg => {
+      try {
+        if (isAdmin(msg)) {
+          return bot.sendMessage(
+            msg.chat.id,
+            `🛠️ BOSS X PRIME ADMIN
+
+Commands:
+
+/admin
+/gen1
+/gen6m
+/genunlimited
+/list
+/id
+/help`
+          );
+        }
+
+        return bot.sendMessage(
+          msg.chat.id,
+          `👑 BOSS X PRIME
+
+Commands:
+
+/start
+/plans
+/id
+/help
+
+Choose a plan and contact admin for payment.`
+        );
+      } catch (error) {
+        console.error(
+          'Help command error:',
+          error
+        );
+      }
+    }
+  );
 
   /* =========================
      /admin
   ========================= */
 
-  bot.onText(/^\/admin$/, async msg => {
-    try {
-      if (!isAdmin(msg)) {
-        const id = String(
-          msg?.from?.id ?? ''
-        ).trim();
+  bot.onText(
+    /^\/admin$/,
+    async msg => {
+      try {
+        if (!isAdmin(msg)) {
+          const id =
+            String(
+              msg?.from?.id || ''
+            ).trim();
+
+          return bot.sendMessage(
+            msg.chat.id,
+            `⛔ Admin only.
+
+Your Telegram ID:
+${id}
+
+Add this ID to Railway variable:
+ADMIN_TELEGRAM_ID`
+          );
+        }
 
         return bot.sendMessage(
           msg.chat.id,
-          `⛔ Admin only.
+          `🛠️ BOSS X PRIME ADMIN PANEL
 
-Your Telegram ID: ${id}
-
-Set this number in Railway → Variables → ADMIN_TELEGRAM_ID, then redeploy.`
+Choose an option:`,
+          adminMenu
+        );
+      } catch (error) {
+        console.error(
+          'Admin command error:',
+          error
         );
       }
-
-      return bot.sendMessage(
-        msg.chat.id,
-        `🛠️ *BOSS X PRIME ADMIN PANEL*
-
-Choose a plan to generate a password.`,
-        {
-          ...adminMenu,
-          parse_mode: 'Markdown'
-        }
-      );
-    } catch (error) {
-      console.error(
-        'Admin command error:',
-        error
-      );
     }
-  });
+  );
 
   /* =========================
-     CALLBACK BUTTONS
+     /gen1
   ========================= */
+
+  bot.onText(
+    /^\/gen1$/,
+    async msg => {
+      try {
+        if (!isAdmin(msg)) {
+          return bot.sendMessage(
+            msg.chat.id,
+            '⛔ Admin only.'
+          );
+        }
+
+        const license =
+          await generateLicense(
+            1
+          );
+
+        return bot.sendMessage(
+          msg.chat.id,
+          `🔐 NEW 1 DAY PASSWORD
+
+${license.code}
+
+⏱️ Validity starts when customer activates it.
+📱 Locked to first device.`
+        );
+      } catch (error) {
+        console.error(
+          'Generate 1 day error:',
+          error
+        );
+
+        await bot.sendMessage(
+          msg.chat.id,
+          '❌ Could not generate password.'
+        );
+      }
+    }
+  );
+
+  /* =========================
+     /gen6m
+  ========================= */
+
+  bot.onText(
+    /^\/gen6m$/,
+    async msg => {
+      try {
+        if (!isAdmin(msg)) {
+          return bot.sendMessage(
+            msg.chat.id,
+            '⛔ Admin only.'
+          );
+        }
+
+        const license =
+          await generateLicense(
+            180
+          );
+
+        return bot.sendMessage(
+          msg.chat.id,
+          `🔐 NEW 6 MONTHS PASSWORD
+
+${license.code}
+
+⏱️ Validity starts when customer activates it.
+📱 Locked to first device.`
+        );
+      } catch (error) {
+        console.error(
+          'Generate 6 months error:',
+          error
+        );
+
+        await bot.sendMessage(
+          msg.chat.id,
+          '❌ Could not generate password.'
+        );
+      }
+    }
+  );
+
+  /* =========================
+     /genunlimited
+  ========================= */
+
+  bot.onText(
+    /^\/genunlimited$/,
+    async msg => {
+      try {
+        if (!isAdmin(msg)) {
+          return bot.sendMessage(
+            msg.chat.id,
+            '⛔ Admin only.'
+          );
+        }
+
+        const license =
+          await generateLicense(
+            0
+          );
+
+        return bot.sendMessage(
+          msg.chat.id,
+          `🔐 NEW UNLIMITED PASSWORD
+
+${license.code}
+
+♾️ Unlimited validity.
+📱 Locked to first device.`
+        );
+      } catch (error) {
+        console.error(
+          'Generate unlimited error:',
+          error
+        );
+
+        await bot.sendMessage(
+          msg.chat.id,
+          '❌ Could not generate password.'
+        );
+      }
+    }
+  );
+
+  /* =========================
+     /list
+  ========================= */
+
+  bot.onText(
+    /^\/list$/,
+    async msg => {
+      try {
+        if (!isAdmin(msg)) {
+          return bot.sendMessage(
+            msg.chat.id,
+            '⛔ Admin only.'
+          );
+        }
+
+        const licenses =
+          await listLicenses();
+
+        if (!licenses.length) {
+          return bot.sendMessage(
+            msg.chat.id,
+            '📋 No passwords generated yet.'
+          );
+        }
+
+        const listText =
+          licenses
+            .slice(0, 30)
+            .map(
+              (item, index) => {
+                const status =
+                  item.revoked_at
+                    ? '❌ Revoked'
+                    : item.activated_at
+                    ? '✅ Active'
+                    : '🟡 Unused';
+
+                return `${index + 1}. ${item.code}
+Plan: ${planLabel(
+                  item.duration_days
+                )}
+Status: ${status}`;
+              }
+            )
+            .join('\n\n');
+
+        return bot.sendMessage(
+          msg.chat.id,
+          `📋 PASSWORD LIST
+
+${listText}`
+        );
+      } catch (error) {
+        console.error(
+          'List command error:',
+          error
+        );
+
+        await bot.sendMessage(
+          msg.chat.id,
+          '❌ Could not load password list.'
+        );
+      }
+    }
+  );
+
+  /* ==================================================
+     CALLBACK BUTTONS
+  ================================================== */
 
   bot.on(
     'callback_query',
     async q => {
       try {
-        const data = String(
-          q.data || ''
-        );
+        const data =
+          String(
+            q.data || ''
+          );
 
-        const [action, raw] =
+        const [
+          action,
+          raw
+        ] =
           data.split(':');
 
-        const days = Number(raw);
+        const days =
+          Number(raw);
 
         /* ======================
            CUSTOMER PURCHASE
@@ -494,45 +955,53 @@ Choose a plan to generate a password.`,
 
         if (
           action === 'buy' &&
-          [1, 180, 0].includes(days)
+          [1, 180, 0].includes(
+            days
+          )
         ) {
           const label =
             planLabel(days);
 
-          /*
-           * FIXED:
-           * No Markdown parsing here.
-           * This prevents:
-           * "can't parse entities"
-           */
+          const name =
+            `${q.from?.first_name || ''} ${
+              q.from?.last_name || ''
+            }`.trim();
 
-          if (ADMIN_TELEGRAM_IDS[0]) {
+          const username =
+            q.from?.username
+              ? `@${q.from.username}`
+              : 'not set';
+
+          if (
+            ADMIN_TELEGRAM_ID
+          ) {
             await bot.sendMessage(
-              ADMIN_TELEGRAM_IDS[0],
-              `🔔 New purchase request
+              ADMIN_TELEGRAM_ID,
+              `🔔 NEW PURCHASE REQUEST
 
 Plan: ${label}
-Customer: ${q.from?.first_name || ''} ${q.from?.last_name || ''}
+Customer: ${name || 'Unknown'}
 Telegram ID: ${q.from?.id || ''}
-Username: @${q.from?.username || 'not set'}`
+Username: ${username}`
             );
           }
 
           await bot.answerCallbackQuery(
             q.id,
             {
-              text: `${label} selected`
+              text:
+                `${label} selected`
             }
           );
 
-          if (q.message?.chat?.id) {
+          if (
+            q.message?.chat?.id
+          ) {
             await bot.sendMessage(
               q.message.chat.id,
               `✅ ${label} selected.
 
-🔐 Please contact the admin for payment and receive your password.
-
-This bot will not show "Admin only" for customer plan selection.`
+🔐 Please contact the admin for payment and password.`
             );
           }
 
@@ -545,14 +1014,18 @@ This bot will not show "Admin only" for customer plan selection.`
 
         if (
           action === 'gen' &&
-          [1, 180, 0].includes(days)
+          [1, 180, 0].includes(
+            days
+          )
         ) {
           if (!isAdmin(q)) {
             await bot.answerCallbackQuery(
               q.id,
               {
-                text: '⛔ Admin only.',
-                show_alert: true
+                text:
+                  '⛔ Admin only.',
+                show_alert:
+                  true
               }
             );
 
@@ -560,30 +1033,34 @@ This bot will not show "Admin only" for customer plan selection.`
           }
 
           const license =
-            await generateLicense(days);
+            await generateLicense(
+              days
+            );
 
           await bot.answerCallbackQuery(
             q.id,
             {
-              text: 'Password generated'
+              text:
+                'Password generated'
             }
           );
 
-          if (!q.message?.chat?.id) {
+          if (
+            !q.message?.chat?.id
+          ) {
             return;
           }
 
           return bot.sendMessage(
             q.message.chat.id,
-            `🔐 *New ${planLabel(days)} Password*
+            `🔐 NEW ${planLabel(
+              days
+            ).toUpperCase()} PASSWORD
 
-\`${license.code}\`
+${license.code}
 
-⏱️ Validity starts when the customer activates it.
-📱 Locked to the first device.`,
-            {
-              parse_mode: 'Markdown'
-            }
+⏱️ Validity starts when customer activates it.
+📱 Locked to first device.`
           );
         }
 
@@ -599,8 +1076,10 @@ This bot will not show "Admin only" for customer plan selection.`
             await bot.answerCallbackQuery(
               q.id,
               {
-                text: '⛔ Admin only.',
-                show_alert: true
+                text:
+                  '⛔ Admin only.',
+                show_alert:
+                  true
               }
             );
 
@@ -613,420 +1092,34 @@ This bot will not show "Admin only" for customer plan selection.`
           const listText =
             licenses.length
               ? licenses
-                  .slice(0, 20)
-                  .map(item => {
-                    const status =
-                      item.revoked_at
-                        ? 'Revoked'
-                        : item.activated_at
-                        ? 'Active'
-                        : 'Unused';
+                  .slice(0, 30)
+                  .map(
+                    (
+                      item,
+                      index
+                    ) => {
+                      const status =
+                        item.revoked_at
+                          ? '❌ Revoked'
+                          : item.activated_at
+                          ? '✅ Active'
+                          : '🟡 Unused';
 
-                    return (
-                      `• \`${item.code}\` — ` +
-                      `${planLabel(
+                      return `${index + 1}. ${item.code}
+Plan: ${planLabel(
                         item.duration_days
-                      )} — ${status}`
-                    );
-                  })
-                  .join('\n')
+                      )}
+Status: ${status}`;
+                    }
+                  )
+                  .join(
+                    '\n\n'
+                  )
               : 'No passwords yet.';
 
           await bot.answerCallbackQuery(
             q.id
           );
 
-          if (!q.message?.chat?.id) {
-            return;
-          }
-
-          return bot.sendMessage(
-            q.message.chat.id,
-            `📋 *Latest passwords*
-
-${listText}`,
-            {
-              parse_mode: 'Markdown'
-            }
-          );
-        }
-
-        /* ======================
-           UNKNOWN ACTION
-        ====================== */
-
-        await bot.answerCallbackQuery(
-          q.id,
-          {
-            text: 'Unknown action',
-            show_alert: true
-          }
-        );
-      } catch (error) {
-        console.error(
-          'Telegram callback error:',
-          error
-        );
-
-        try {
-          await bot.answerCallbackQuery(
-            q.id,
-            {
-              text: 'Something went wrong',
-              show_alert: true
-            }
-          );
-        } catch {}
-      }
-    }
-  );
-
-  console.log(
-    'Telegram premium bot started'
-  );
-}
-
-/* =========================
-   PUBLIC CONFIG
-========================= */
-
-app.get(
-  '/api/config',
-  (req, res) => {
-    res.json({
-      name: 'BOSS X PRIME',
-      extensionName: 'BOSS Premium Mic',
-      activationRequired: true
-    });
-  }
-);
-
-/* =========================
-   ACTIVATION
-========================= */
-
-app.post(
-  '/api/activate',
-  async (req, res) => {
-    try {
-      const code = String(
-        req.body.code || ''
-      )
-        .trim()
-        .toUpperCase();
-
-      const deviceId = String(
-        req.body.deviceId || ''
-      )
-        .trim()
-        .slice(0, 120);
-
-      if (!code) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'Enter your password'
-          });
-      }
-
-      if (!deviceId) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'This device could not be identified. Please enable browser storage and try again.'
-          });
-      }
-
-      /* ======================
-         FIXED PASSWORDS
-      ====================== */
-
-      let fixed = null;
-
-      if (
-        FIXED_PASSWORDS.oneDay &&
-        code === String(
-          FIXED_PASSWORDS.oneDay
-        )
-          .trim()
-          .toUpperCase()
-      ) {
-        fixed = {
-          duration_days: 1
-        };
-      }
-
-      if (
-        !fixed &&
-        FIXED_PASSWORDS.sixMonths &&
-        code === String(
-          FIXED_PASSWORDS.sixMonths
-        )
-          .trim()
-          .toUpperCase()
-      ) {
-        fixed = {
-          duration_days: 180
-        };
-      }
-
-      if (
-        !fixed &&
-        FIXED_PASSWORDS.unlimited &&
-        code === String(
-          FIXED_PASSWORDS.unlimited
-        )
-          .trim()
-          .toUpperCase()
-      ) {
-        fixed = {
-          duration_days: 0
-        };
-      }
-
-      let license =
-        await getLicense(code);
-
-      const isNewFixed =
-        !license &&
-        Boolean(fixed);
-
-      if (isNewFixed) {
-        license = {
-          code,
-          duration_days:
-            fixed.duration_days,
-          created_at:
-            new Date().toISOString(),
-          activated_at: null,
-          expires_at: null,
-          revoked_at: null,
-          device_id: null
-        };
-      }
-
-      if (!license) {
-        return res
-          .status(404)
-          .json({
-            error:
-              'Invalid password'
-          });
-      }
-
-      if (license.revoked_at) {
-        return res
-          .status(403)
-          .json({
-            error:
-              'This password has been revoked'
-          });
-      }
-
-      const now = new Date();
-
-      if (
-        license.expires_at &&
-        new Date(
-          license.expires_at
-        ) <= now
-      ) {
-        return res
-          .status(403)
-          .json({
-            error:
-              'This password has expired'
-          });
-      }
-
-      /* ======================
-         FIRST ACTIVATION
-      ====================== */
-
-      if (!license.activated_at) {
-        license.activated_at =
-          now.toISOString();
-
-        license.expires_at =
-          license.duration_days === 0
-            ? null
-            : new Date(
-                now.getTime() +
-                  license.duration_days *
-                    86400000
-              ).toISOString();
-
-        license.device_id =
-          deviceId;
-
-        if (isNewFixed) {
-          await saveLicense(
-            license
-          );
-        } else {
-          await updateLicense(
-            license
-          );
-        }
-
-      /* ======================
-         EXISTING LICENSE
-      ====================== */
-
-      } else if (
-        license.device_id &&
-        license.device_id !== deviceId
-      ) {
-        return res
-          .status(403)
-          .json({
-            error:
-              'This password is already activated on another device'
-          });
-      }
-
-      return res.json({
-        ok: true,
-        expiresAt:
-          license.expires_at,
-        plan: planLabel(
-          license.duration_days
-        )
-      });
-
-    } catch (error) {
-      console.error(
-        'Activation error:',
-        error
-      );
-
-      return res
-        .status(500)
-        .json({
-          error:
-            'Activation service error'
-        });
-    }
-  }
-);
-
-/* =========================
-   ADMIN LOGIN
-========================= */
-
-app.post(
-  '/api/admin/login',
-  (req, res) => {
-    const user = String(
-      req.body.username || ''
-    );
-
-    const pass = String(
-      req.body.password || ''
-    );
-
-    if (
-      user !== ADMIN_USER ||
-      pass !== ADMIN_PASSWORD
-    ) {
-      return res
-        .status(401)
-        .json({
-          error:
-            'Invalid admin credentials'
-        });
-    }
-
-    const payload = {
-      u: user,
-      exp:
-        Date.now() +
-        12 * 60 * 60 * 1000
-    };
-
-    res.setHeader(
-      'Set-Cookie',
-      `boss_admin=${encodeURIComponent(
-        cookieValue(payload)
-      )}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`
-    );
-
-    return res.json({
-      ok: true
-    });
-  }
-);
-
-/* =========================
-   ADMIN LOGOUT
-========================= */
-
-app.post(
-  '/api/admin/logout',
-  adminRequired,
-  (req, res) => {
-    res.setHeader(
-      'Set-Cookie',
-      'boss_admin=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0'
-    );
-
-    res.json({
-      ok: true
-    });
-  }
-);
-
-/* =========================
-   ADMIN LICENSE LIST
-========================= */
-
-app.get(
-  '/api/admin/licenses',
-  adminRequired,
-  async (req, res) => {
-    try {
-      res.json(
-        await listLicenses()
-      );
-    } catch (error) {
-      console.error(
-        'List licenses error:',
-        error
-      );
-
-      res
-        .status(500)
-        .json({
-          error:
-            'Could not load licenses'
-        });
-    }
-  }
-);
-
-/* =========================
-   ADMIN CREATE LICENSE
-========================= */
-
-app.post(
-  '/api/admin/licenses',
-  adminRequired,
-  async (req, res) => {
-    try {
-      const duration =
-        Number(
-          req.body.durationDays
-        );
-
-      if (
-        ![1, 180, 0].includes(
-          duration
-        )
-      ) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'Duration mu
+          if (
+            !q.message?.cha
