@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BOSS X PRIME</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="bg"></div>
+<header class="top">
+  <a class="brand" href="/">BOSS X PRIME <span>POWER AUDIO</span></a>
+  <nav>
+    <a href="#audio">Power Audio</a>
+    <a href="#whatsapp">WhatsApp</a>
+    <a href="#plans">Plans</a>
+    <a class="buy" href="https://t.me/BOSSX929" target="_blank" rel="noopener">BUY / CONTACT</a>
+  </nav>
+</header>
+
+<main>
+<section class="hero">
+  <div class="heroCopy">
+    <div class="eyebrow">SECURE • PREMIUM • DEVICE LICENSED</div>
+    <h1>BOSS X PRIME<br><span>POWER AUDIO</span></h1>
+    <p>Private device-based access for BOSS X PRIME. Activate your own license, use the Power Audio controls, and open WhatsApp Web through the official site.</p>
+    <div class="heroButtons">
+      <a class="btn primary" href="#login">ENTER LICENSE</a>
+      <a class="btn ghost" href="https://web.whatsapp.com/" target="_blank" rel="noopener">OPEN WHATSAPP WEB</a>
+    </div>
+    <p class="tiny">WhatsApp account linking is handled only by the official WhatsApp Web page. This website does not collect WhatsApp QR/session data.</p>
+  </div>
+  <div class="heroCard">
+    <div class="orb"></div>
+    <div class="mini">BOSS X PRIME</div>
+    <strong>POWER AUDIO</strong>
+    <span>MIC SYSTEM ONLINE</span>
+    <div class="meter"><i></i></div>
+  </div>
+</section>
+
+<section id="login" class="section gate">
+  <div class="sectionHead"><div><div class="eyebrow">DEVICE ACCESS</div><h2>License Login</h2></div><span id="deviceState" class="pill">DEVICE ID READY</span></div>
+  <div class="loginGrid">
+    <div class="card">
+      <label>License Code<input id="code" autocomplete="off" placeholder="BXP-XXXXXX"></label>
+      <label>Private Password<input id="password" type="password" autocomplete="off" placeholder="Your private password"></label>
+      <button id="activate" class="btn primary wide">ACTIVATE THIS DEVICE</button>
+      <p id="loginMsg" class="msg"></p>
+      <p class="tiny">Each generated license is intended for one device. The password is only issued by the admin Telegram bot.</p>
+    </div>
+    <div class="card statusCard">
+      <div class="statusIcon">✓</div>
+      <h3 id="licenseTitle">Locked</h3>
+      <p id="licenseInfo">Enter a valid license code and private password to unlock the Power Audio controls.</p>
+      <button id="logoutDevice" class="textBtn">Clear this device license</button>
+    </div>
+  </div>
+</section>
+
+<section id="audio" class="section locked" data-feature="audio">
+  <div class="sectionHead"><div><div class="eyebrow">BOSS AUDIO ENGINE</div><h2>Power Audio / Mic System</h2></div><span id="audioLock" class="pill danger">LOCKED</span></div>
+  <div class="audioGrid">
+    <div class="card controls">
+      <div class="controlTop"><h3>Mic Processor</h3><button id="micStart" class="btn small">START MIC TEST</button></div>
+      <label>Gain <output id="gainOut">1.8x</output><input id="gain" type="range" min="1" max="3" step=".1" value="1.8"></label>
+      <label>Compressor <output id="compOut">4:1</output><input id="comp" type="range" min="1" max="20" step=".5" value="4"></label>
+      <label>Presence EQ <output id="presenceOut">3 dB</output><input id="presence" type="range" min="-12" max="12" step=".5" value="3"></label>
+      <label>Bass EQ <output id="bassOut">1 dB</output><input id="bass" type="range" min="-12" max="12" step=".5" value="1"></label>
+      <label>Treble EQ <output id="trebleOut">2 dB</output><input id="treble" type="range" min="-12" max="12" step=".5" value="2"></label>
+      <label class="check"><input id="sustain" type="checkbox" checked> Anti-duck sustain</label>
+      <div class="meterBox"><div class="meterLabel"><span>INPUT LEVEL</span><span id="levelText">-∞ dB</span></div><div class="level"><i id="levelBar"></i></div></div>
+      <p class="tiny">The web mic test previews processing in this page only. For WhatsApp Web calls, use the supplied BOSS Premium Mic extension with WhatsApp Web.</p>
+    </div>
+    <div class="card feature">
+      <div class="featureLogo">BX</div>
+      <h3>BOSS Premium Mic</h3>
+      <p>Based on the supplied BOSS Premium Mic extension: gain, compressor, EQ, limiter and sustain controls.</p>
+      <a class="btn primary wide" href="/BOSS-Premium-Mic.zip">DOWNLOAD MIC EXTENSION</a>
+      <a class="btn ghost wide" href="https://web.whatsapp.com/" target="_blank" rel="noopener">OPEN OFFICIAL WHATSAPP WEB</a>
+      <div class="note">Install the extension in a compatible Chromium browser, open WhatsApp Web, reload the tab, then join your call.</div>
+    </div>
+  </div>
+</section>
+
+<section id="whatsapp" class="section">
+  <div class="sectionHead"><div><div class="eyebrow">OFFICIAL WHATSAPP</div><h2>Device Access</h2></div><span class="pill">SAFE LINK</span></div>
+  <div class="waCard card">
+    <div class="waIcon">WA</div>
+    <div><h3>Link your own device on WhatsApp Web</h3><p>Use the official WhatsApp Web page for QR/device linking. BOSS X PRIME does not proxy, store, or read WhatsApp login QR codes or sessions.</p></div>
+    <a class="btn primary" href="https://web.whatsapp.com/" target="_blank" rel="noopener">OPEN WHATSAPP WEB</a>
+  </div>
+</section>
+
+<section id="plans" class="section">
+  <div class="sectionHead"><div><div class="eyebrow">TELEGRAM LICENSES</div><h2>Choose your plan</h2></div><a class="pill buyPill" href="https://t.me/BOSSX929" target="_blank" rel="noopener">t.me/BOSSX929</a></div>
+  <div class="plans">
+    <article class="plan card"><b>1 DAY</b><strong>24 Hours</strong><p>One-device license.</p><a class="btn ghost wide" href="https://t.me/BOSSX929" target="_blank" rel="noopener">BUY ON TELEGRAM</a></article>
+    <article class="plan card hot"><b>3 MONTHS</b><strong>90 Days</strong><p>One-device license.</p><a class="btn ghost wide" href="https://t.me/BOSSX929" target="_blank" rel="noopener">BUY ON TELEGRAM</a></article>
+    <article class="plan card"><b>6 MONTHS</b><strong>183 Days</strong><p>One-device license.</p><a class="btn ghost wide" href="https://t.me/BOSSX929" target="_blank" rel="noopener">BUY ON TELEGRAM</a></article>
+    <article class="plan card"><b>UNLIMITED</b><strong>No expiry</strong><p>One-device license.</p><a class="btn ghost wide" href="https://t.me/BOSSX929" target="_blank" rel="noopener">BUY ON TELEGRAM</a></article>
+  </div>
+</section>
+</main>
+
+<footer><strong>BOSS X PRIME</strong><span>POWER AUDIO • DEVICE LICENSE SYSTEM</span><a href="https://t.me/BOSSX929" target="_blank" rel="noopener">Telegram: @BOSSX929</a></footer>
+<script src="/app.js"></script>
+</body>
+</html>
