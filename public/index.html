@@ -53,10 +53,10 @@ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}th,td{p
       <div><h1>BOSS X PRIME</h1><small>Secure device access</small></div>
     </div>
     <h2>Welcome back</h2>
-    <p class="muted">Your device needs its own one-time access password. Request it and enter the code sent to the BOSS X Telegram bot.</p>
-    <button class="primary" onclick="requestCode()">Send access password</button>
+    <p class="muted">Request access for this device. The administrator will choose a plan and send your one-time password through Telegram.</p>
+    <button class="primary" onclick="requestCode()">Request device access</button>
     <p id="requestMsg" class="msg muted"></p>
-    <input id="code" inputmode="numeric" maxlength="6" placeholder="6-digit device password" autocomplete="one-time-code">
+    <input id="code" inputmode="numeric" maxlength="6" placeholder="6-digit one-time password" autocomplete="one-time-code">
     <button class="secondary" onclick="login()">Login to BOSS X</button>
     <p id="msg" class="msg"></p>
     <div class="devicebox">Device ID: <span id="deviceText"></span></div>
@@ -108,7 +108,7 @@ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}th,td{p
   </div>
 
   <div class="card hidden" id="admin" style="padding:24px">
-    <div class="top"><div><h2>Admin Panel</h2><p class="muted">Manage BOSS X device access</p></div><button class="secondary" style="width:auto" onclick="loadDevices()">Refresh</button></div>
+    <div class="top"><div><h2>Admin Panel</h2><p class="muted">Manage device access and issue passwords</p></div><button class="secondary" style="width:auto" onclick="loadDevices()">Refresh</button></div>
     <div id="devices" class="tablewrap"></div>
   </div>
 </div>
@@ -149,12 +149,19 @@ function show(id,btn){
 async function loadDevices(){
   try{
     const rows=await api("/api/admin/devices");
-    const html=rows.length?`<table><tr><th>Device</th><th>Status</th><th>Expires</th><th>Action</th></tr>${rows.map(x=>{
-      const status=x.revoked?'<span class="badge brev">REVOKED</span>':x.used?'<span class="badge bused">USED</span>':'<span class="badge bactive">ACTIVE</span>';
-      return `<tr><td>${x.device_id}</td><td>${status}</td><td>${new Date(x.expires_at).toLocaleString()}</td><td>${x.revoked?"—":`<button class="danger" onclick="revoke(${x.id})">Revoke</button>`}</td></tr>`
-    }).join("")}</table>`:"<p class='muted'>No devices yet.</p>";
+    const html=rows.length?`<table><tr><th>Device</th><th>Plan / Status</th><th>Expires</th><th>Issue / Action</th></tr>${rows.map(x=>{
+      const status=x.revoked?'<span class="badge brev">REVOKED</span>':x.plan==="pending"?'<span class="badge bused">PENDING</span>':x.used?'<span class="badge bused">CODE USED</span>':'<span class="badge bactive">ACTIVE</span>';
+      const names={day:"1 Day",month:"1 Month",six_months:"6 Months",unlimited:"Unlimited",pending:"Not issued"};
+      const expiry=x.plan==="unlimited"?"Never":x.plan==="pending"?"Awaiting approval":new Date(x.expires_at).toLocaleString();
+      const action=x.revoked?"—":`<select id="plan-${x.id}" style="max-width:130px;background:#111;color:#fff;padding:8px;border-radius:8px"><option value="day">1 Day</option><option value="month">1 Month</option><option value="six_months">6 Months</option><option value="unlimited">Unlimited</option></select> <button onclick="issueCode(${x.id})">Issue / Renew</button> ${x.plan!=="pending"?`<button class="danger" onclick="revoke(${x.id})">Revoke</button>`:""}`;
+      return `<tr><td>${x.device_id}</td><td>${names[x.plan]||x.plan}<br>${status}</td><td>${expiry}</td><td>${action}</td></tr>`
+    }).join("")}</table>`:"<p class='muted'>No device requests yet.</p>";
     document.getElementById("devices").innerHTML=html
   }catch(e){document.getElementById("devices").textContent=e.message}
+}
+async function issueCode(id){
+  try{const plan=document.getElementById("plan-"+id).value;const d=await api("/api/admin/issue-code",{method:"POST",body:JSON.stringify({id,plan})});alert(d.message);loadDevices()}
+  catch(e){alert(e.message)}
 }
 async function revoke(id){await api("/api/admin/revoke",{method:"POST",body:JSON.stringify({id})});loadDevices()}
 (async function restoreSession(){
