@@ -135,7 +135,7 @@ function startTelegramBot() {
         return bot.sendMessage(q.message.chat.id, `🔐 *New ${planLabel(days)} Password*\n\n\`${l.code}\`\n\n⏱️ Validity starts when the customer activates it.\n📱 Locked to the first device.`, {parse_mode:'Markdown'});
       }
       if (action==='list') {
-        if (!isAdmin(q.message)) return bot.answerCallbackQuery(q.id,{text:'Admin only',show_alert:true});
+        if (!isAdmin({ from: q.from })) return bot.answerCallbackQuery(q.id,{text:'Bossx Admin only',show_alert:true});
         const list=await listLicenses();
         const text=list.length ? list.slice(0,20).map(x=>`• \`${x.code}\` — ${planLabel(x.duration_days)} — ${x.activated_at?'Active':'Unused'}${x.revoked_at?' — Revoked':''}`).join('\n') : 'No passwords yet.';
         return bot.sendMessage(q.message.chat.id, `📋 *Latest passwords*\n\n${text}`, {parse_mode:'Markdown'});
