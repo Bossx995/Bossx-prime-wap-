@@ -87,6 +87,7 @@ app.post('/api/activate', async (req,res)=>{
     const code = String(req.body.code || '').trim().toUpperCase();
     const deviceId = String(req.body.deviceId || '').trim().slice(0,120);
     if (!code) return res.status(400).json({error:'Enter your password'});
+    if (!deviceId) return res.status(400).json({error:'This device could not be identified. Please enable browser storage and try again.'});
     // Fixed passwords are optional; when supplied, they behave like normal licenses.
     const fixed = code === String(FIXED_PASSWORDS.oneDay || '').trim().toUpperCase() ? {duration_days:1} :
       code === String(FIXED_PASSWORDS.sixMonths || '').trim().toUpperCase() ? {duration_days:180} :
