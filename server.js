@@ -1,5 +1,1032 @@
-import express from 'express'; import crypto from 'crypto'; import path from 'path'; import { fileURLToPath } from 'url'; import pg from 'pg'; import TelegramBot from 'node-telegram-bot-api'; const __dirname = path.dirname(fileURLToPath(import.meta.url)); const app = express(); app.use(express.json()); app.use(express.urlencoded({ extended: false })); app.use(express.static(path.join(__dirname, 'public'))); const PORT = process.env.PORT || 3000; const ADMIN_USER = process.env.ADMIN_USER || ''; const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''; const SESSION_SECRET = process.env.SESSION_SECRET || ''; const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''; const ADMIN_TELEGRAM_IDS = String(process.env.ADMIN_TELEGRAM_ID || '').split(',').map(v => v.trim()).filter(Boolean); const FIXED_PASSWORDS = { oneDay: process.env.BOSS_1D_PASSWORD || '', sixMonths: process.env.BOSS_6M_PASSWORD || '', unlimited: process.env.BOSS_UNLIMITED_PASSWORD || '' }; const pool = process.env.DATABASE_URL ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }) : null; const memory = { licenses: new Map() }; /* ========================= DATABASE ========================= */ async function initDb() { if (!pool) return; await pool.query(` CREATE TABLE IF NOT EXISTS licenses ( id SERIAL PRIMARY KEY, code TEXT UNIQUE NOT NULL, duration_days INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), activated_at TIMESTAMPTZ, expires_at TIMESTAMPTZ, revoked_at TIMESTAMPTZ, device_id TEXT ) `); } /* ========================= LICENSE HELPERS ========================= */ function makeCode(days) { const tag = days === 1 ? '1D' : days === 180 ? '6M' : 'UNL'; return `BOSS-${tag}-${crypto .randomBytes(8) .toString('hex') .toUpperCase()}`; } function planLabel(days) { if (days === 0) return 'Unlimited'; if (days === 1) return '1 Day'; return '6 Months'; } /* ========================= SESSION ========================= */ function cookieValue(payload) { const raw = Buffer .from(JSON.stringify(payload)) .toString('base64url'); const sig = crypto .createHmac('sha256', SESSION_SECRET) .update(raw) .digest('base64url'); return `${raw}.${sig}`; } function readCookie(req, name) { const cookies = Object.fromEntries( (req.headers.cookie || '') .split(';') .filter(Boolean) .map(v => { const i = v.indexOf('='); return [ v.slice(0, i).trim(), decodeURIComponent(v.slice(i + 1)) ]; }) ); return cookies[name]; } /* ========================= ADMIN WEB AUTH ========================= */ function adminRequired(req, res, next) { const token = readCookie(req, 'boss_admin'); if (!token) { return res.status(401).json({ error: 'Admin login required' }); } const [raw, sig] = String(token).split('.'); if (!raw || !sig) { return res.status(401).json({ error: 'Invalid admin session' }); } const expected = crypto .createHmac('sha256', SESSION_SECRET) .update(raw) .digest('base64url'); const actualBuffer = Buffer.from(sig); const expectedBuffer = Buffer.from(expected); if ( actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual( actualBuffer, expectedBuffer ) ) { return res.status(401).json({ error: 'Invalid admin session' }); } try { const data = JSON.parse( Buffer .from(raw, 'base64url') .toString() ); if ( data.exp < Date.now() || data.u !== ADMIN_USER ) { throw new Error( 'Expired or invalid session' ); } } catch { return res.status(401).json({ error: 'Admin session expired' }); } next(); } /* ========================= LICENSE DATABASE FUNCTIONS ========================= */ async function getLicense(code) { if (pool) { const result = await pool.query( 'SELECT * FROM licenses WHERE code=$1', [code] ); return result.rows[0] || null; } return memory.licenses.get(code) || null; } async function saveLicense(license) { if (pool) { await pool.query( `INSERT INTO licenses ( code, duration_days, created_at, activated_at, expires_at, revoked_at, device_id ) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [ license.code, license.duration_days, license.created_at, license.activated_at, license.expires_at, license.revoked_at, license.device_id ] ); return; } memory.licenses.set( license.code, license ); } async function updateLicense(license) { if (pool) { await pool.query( `UPDATE licenses SET activated_at=$1, expires_at=$2, revoked_at=$3, device_id=$4 WHERE code=$5`, [ license.activated_at, license.expires_at, license.revoked_at, license.device_id, license.code ] ); return; } memory.licenses.set( license.code, license ); } async function listLicenses() { if (pool) { const result = await pool.query( 'SELECT * FROM licenses ORDER BY id DESC' ); return result.rows; } return [...memory.licenses.values()] .sort( (a, b) => new Date(b.created_at) - new Date(a.created_at) ); } async function generateLicense(duration) { let code; do { code = makeCode(duration); } while (await getLicense(code)); const license = { code, duration_days: duration, created_at: new Date().toISOString(), activated_at: null, expires_at: null, revoked_at: null, device_id: null }; await saveLicense(license); return license; } /* ========================= TELEGRAM BOT ========================= */ function startTelegramBot() { if (!TELEGRAM_BOT_TOKEN) { console.log( 'Telegram bot disabled: missing bot token' ); return; } const bot = new TelegramBot( TELEGRAM_BOT_TOKEN, { polling: true } ); /* * IMPORTANT: * Telegram normal message: * msg.from.id * * Telegram callback: * q.from.id * * তাই callback-এ q.message দিয়ে * Admin check করা যাবে না। */ const isAdmin = user => { if (!ADMIN_TELEGRAM_ID) { return false; } return ( String( user?.from?.id ?? user?.id ?? '' ).trim() === ADMIN_TELEGRAM_ID ); }; /* ========================= CUSTOMER MENU ========================= */ const customerMenu = { reply_markup: { inline_keyboard: [ [ { text: '💎 1 Day', callback_data: 'buy:1' }, { text: '💎 6 Months', callback_data: 'buy:180' } ], [ { text: '♾️ Unlimited', callback_data: 'buy:0' } ] ] } }; /* ========================= ADMIN MENU ========================= */ const adminMenu = { reply_markup: { inline_keyboard: [ [ { text: '🔑 Generate 1 Day', callback_data: 'gen:1' } ], [ { text: '🔑 Generate 6 Months', callback_data: 'gen:180' } ], [ { text: '🔑 Generate Unlimited', callback_data: 'gen:0' } ], [ { text: '📋 Password List', callback_data: 'list:all' } ] ] } }; /* ========================= /start ========================= */ bot.onText( /^\/start$/, async msg => { try { await bot.sendMessage( msg.chat.id, '👑 *BOSS X PRIME*\n\nChoose your plan. Contact the admin for payment and your password.', { ...customerMenu, parse_mode: 'Markdown' } ); } catch (error) { console.error( 'Start command error:', error ); } } ); /* ========================= /admin ========================= */ bot.onText( /^\/admin$/, async msg => { try { if (!isAdmin(msg)) {
-      const id = String(msg?.from?.id ?? '').trim();
-      return bot.sendMessage(msg.chat.id, `⛔ Admin only.\n\nYour Telegram ID: ${id}\n\nSet this number in Railway → Variables → ADMIN_TELEGRAM_ID, then redeploy.`);
-    } return bot.sendMessage( msg.chat.id, '🛠️ *BOSS X PRIME ADMIN PANEL*\n\nChoose a plan to generate a password.', { ...adminMenu, parse_mode: 'Markdown' } ); } catch (error) { console.error( 'Admin command error:', error ); } } ); /* ========================= CALLBACK BUTTONS ========================= */ bot.on( 'callback_query', async q => { try { const data = String(q.data || ''); const [action, raw] = data.split(':'); const days = Number(raw); /* * ====================== * CUSTOMER PURCHASE * ====================== */ if ( action === 'buy' && [1, 180, 0].includes(days) ) { const label = planLabel(days); if (ADMIN_TELEGRAM_IDS[0]) { await bot.sendMessage( ADMIN_TELEGRAM_IDS[0], `🔔 *New purchase request*\n\n` + `Plan: *${label}*\n` + `Customer: ${q.from?.first_name || ''} ${q.from?.last_name || ''}\n` + `Telegram ID: \`${q.from?.id || ''}\`\n` + `Username: @${q.from?.username || 'not set'}`, { parse_mode: 'Markdown' } ); } await bot.answerCallbackQuery( q.id, { text: `${label} selected` } ); if (q.message?.chat?.id) { await bot.sendMessage( q.message.chat.id, `✅ *${label} selected.*\n\n` + `🔐 Please contact the admin for payment and receive your password.\n\nThis bot will not show \`Admin only.\` for customer plan selection.`, { parse_mode: 'Markdown' } ); } return; } /* * ====================== * ADMIN GENERATE * ====================== * * THIS IS THE IMPORTANT FIX. * * এখানে q.message নয়, * q.from ব্যবহার করা হচ্ছে। */ if ( action === 'gen' && [1, 180, 0].includes(days) ) { if (!isAdmin(q)) { await bot.answerCallbackQuery( q.id, { text: '⛔ Admin only.', show_alert: true } ); return; } const license = await generateLicense( days ); await bot.answerCallbackQuery( q.id, { text: 'Password generated' } ); if (!q.message?.chat?.id) { return; } return bot.sendMessage( q.message.chat.id, `🔐 *New ${planLabel(days)} Password*\n\n` + `\`${license.code}\`\n\n` + `⏱️ Validity starts when the customer activates it.\n` + `📱 Locked to the first device.`, { parse_mode: 'Markdown' } ); } /* * ====================== * PASSWORD LIST * ====================== */ if ( action === 'list' && raw === 'all' ) { if (!isAdmin(q)) { await bot.answerCallbackQuery( q.id, { text: '⛔ Admin only.', show_alert: true } ); return; } const licenses = await listLicenses(); const listText = licenses.length ? licenses .slice(0, 20) .map(item => { const status = item.revoked_at ? 'Revoked' : item.activated_at ? 'Active' : 'Unused'; return ( `• \`${item.code}\` — ` + `${planLabel( item.duration_days )} — ${status}` ); }) .join('\n') : 'No passwords yet.'; await bot.answerCallbackQuery( q.id ); if (!q.message?.chat?.id) { return; } return bot.sendMessage( q.message.chat.id, `📋 *Latest passwords*\n\n${listText}`, { parse_mode: 'Markdown' } ); } /* * ====================== * UNKNOWN ACTION * ====================== */ await bot.answerCallbackQuery( q.id, { text: 'Unknown action', show_alert: true } ); } catch (error) { console.error( 'Telegram callback error:', error ); try { await bot.answerCallbackQuery( q.id, { text: 'Something went wrong', show_alert: true } ); } catch {} } } ); console.log( 'Telegram premium bot started' ); } /* ========================= PUBLIC CONFIG ========================= */ app.get( '/api/config', (req, res) => { res.json({ name: 'BOSS X PRIME', extensionName: 'BOSS Premium Mic', activationRequired: true }); } ); /* ========================= ACTIVATION ========================= */ app.post( '/api/activate', async (req, res) => { try { const code = String( req.body.code || '' ) .trim() .toUpperCase(); const deviceId = String( req.body.deviceId || '' ) .trim() .slice(0, 120); if (!code) { return res.status(400).json({ error: 'Enter your password' }); } if (!deviceId) { return res.status(400).json({ error: 'This device could not be identified. Please enable browser storage and try again.' }); } /* * FIXED PASSWORDS */ let fixed = null; if ( FIXED_PASSWORDS.oneDay && code === String( FIXED_PASSWORDS.oneDay ) .trim() .toUpperCase() ) { fixed = { duration_days: 1 }; } if ( !fixed && FIXED_PASSWORDS.sixMonths && code === String( FIXED_PASSWORDS.sixMonths ) .trim() .toUpperCase() ) { fixed = { duration_days: 180 }; } if ( !fixed && FIXED_PASSWORDS.unlimited && code === String( FIXED_PASSWORDS.unlimited ) .trim() .toUpperCase() ) { fixed = { duration_days: 0 }; } let license = await getLicense(code); const isNewFixed = !license && Boolean(fixed); if (isNewFixed) { license = { code, duration_days: fixed.duration_days, created_at: new Date().toISOString(), activated_at: null, expires_at: null, revoked_at: null, device_id: null }; } if (!license) { return res.status(404).json({ error: 'Invalid password' }); } if (license.revoked_at) { return res.status(403).json({ error: 'This password has been revoked' }); } const now = new Date(); if ( license.expires_at && new Date( license.expires_at ) <= now ) { return res.status(403).json({ error: 'This password has expired' }); } /* * FIRST ACTIVATION */ if (!license.activated_at) { license.activated_at = now.toISOString(); license.expires_at = license.duration_days === 0 ? null : new Date( now.getTime() + license.duration_days * 86400000 ).toISOString(); license.device_id = deviceId; if (isNewFixed) { await saveLicense( license ); } else { await updateLicense( license ); } /* * EXISTING LICENSE */ } else if ( license.device_id && license.device_id !== deviceId ) { return res.status(403).json({ error: 'This password is already activated on another device' }); } return res.json({ ok: true, expiresAt: license.expires_at, plan: planLabel( license.duration_days ) }); } catch (error) { console.error( 'Activation error:', error ); return res.status(500).json({ error: 'Activation service error' }); } } ); /* ========================= ADMIN LOGIN ========================= */ app.post( '/api/admin/login', (req, res) => { const user = String( req.body.username || '' ); const pass = String( req.body.password || '' ); if ( user !== ADMIN_USER || pass !== ADMIN_PASSWORD ) { return res.status(401).json({ error: 'Invalid admin credentials' }); } const payload = { u: user, exp: Date.now() + 12 * 60 * 60 * 1000 }; res.setHeader( 'Set-Cookie', `boss_admin=${encodeURIComponent( cookieValue(payload) )}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200` ); return res.json({ ok: true }); } ); /* ========================= ADMIN LOGOUT ========================= */ app.post( '/api/admin/logout', adminRequired, (req, res) => { res.setHeader( 'Set-Cookie', 'boss_admin=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' ); res.json({ ok: true }); } ); /* ========================= ADMIN LICENSE LIST ========================= */ app.get( '/api/admin/licenses', adminRequired, async (req, res) => { try { res.json( await listLicenses() ); } catch (error) { console.error( 'List licenses error:', error ); res.status(500).json({ error: 'Could not load licenses' }); } } ); /* ========================= ADMIN CREATE LICENSE ========================= */ app.post( '/api/admin/licenses', adminRequired, async (req, res) => { try { const duration = Number( req.body.durationDays ); if ( ![1, 180, 0].includes( duration ) ) { return res.status(400).json({ error: 'Duration must be 1, 180 or 0 (Unlimited)' }); } const license = await generateLicense( duration ); res.json(license); } catch (error) { console.error( 'Create license error:', error ); res.status(500).json({ error: 'Could not create license' }); } } ); /* ========================= ADMIN REVOKE LICENSE ========================= */ app.post( '/api/admin/licenses/:code/revoke', adminRequired, async (req, res) => { try { const license = await getLicense( req.params.code ); if (!license) { return res.status(404).json({ error: 'Not found' }); } license.revoked_at = new Date().toISOString(); await updateLicense( license ); res.json({ ok: true }); } catch (error) { console.error( 'Revoke license error:', error ); res.status(500).json({ error: 'Could not revoke license' }); } } ); /* ========================= ADMIN PAGE ========================= */ app.get( '/admin', (req, res) => { res.sendFile( path.join( __dirname, 'public', 'admin.html' ) ); } ); /* ========================= DEFAULT PAGE ========================= */ app.use( (req, res) => { res.sendFile( path.join( __dirname, 'public', 'index.html' ) ); } ); /* ========================= START SERVER ========================= */ initDb() .then(() => { startTelegramBot(); app.listen( PORT, () => { console.log( `BOSS X PRIME site running on port ${PORT}` ); } ); }) .catch(error => { console.error( 'Startup error:', error ); process.exit(1); });
-    
+import express from 'express';
+import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import pg from 'pg';
+import TelegramBot from 'node-telegram-bot-api';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const app = express();
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+const PORT = process.env.PORT || 3000;
+
+const ADMIN_USER = process.env.ADMIN_USER || '';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+
+const ADMIN_TELEGRAM_IDS = String(
+  process.env.ADMIN_TELEGRAM_ID || ''
+)
+  .split(',')
+  .map(v => v.trim())
+  .filter(Boolean);
+
+const FIXED_PASSWORDS = {
+  oneDay: process.env.BOSS_1D_PASSWORD || '',
+  sixMonths: process.env.BOSS_6M_PASSWORD || '',
+  unlimited: process.env.BOSS_UNLIMITED_PASSWORD || ''
+};
+
+const pool = process.env.DATABASE_URL
+  ? new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    })
+  : null;
+
+const memory = {
+  licenses: new Map()
+};
+
+/* =========================
+   DATABASE
+========================= */
+
+async function initDb() {
+  if (!pool) return;
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS licenses (
+      id SERIAL PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      duration_days INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      activated_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
+      device_id TEXT
+    )
+  `);
+}
+
+/* =========================
+   LICENSE HELPERS
+========================= */
+
+function makeCode(days) {
+  const tag =
+    days === 1
+      ? '1D'
+      : days === 180
+      ? '6M'
+      : 'UNL';
+
+  return `BOSS-${tag}-${crypto
+    .randomBytes(8)
+    .toString('hex')
+    .toUpperCase()}`;
+}
+
+function planLabel(days) {
+  if (days === 0) return 'Unlimited';
+  if (days === 1) return '1 Day';
+  return '6 Months';
+}
+
+/* =========================
+   SESSION
+========================= */
+
+function cookieValue(payload) {
+  const raw = Buffer
+    .from(JSON.stringify(payload))
+    .toString('base64url');
+
+  const sig = crypto
+    .createHmac('sha256', SESSION_SECRET)
+    .update(raw)
+    .digest('base64url');
+
+  return `${raw}.${sig}`;
+}
+
+function readCookie(req, name) {
+  const cookies = Object.fromEntries(
+    (req.headers.cookie || '')
+      .split(';')
+      .filter(Boolean)
+      .map(v => {
+        const i = v.indexOf('=');
+
+        return [
+          v.slice(0, i).trim(),
+          decodeURIComponent(v.slice(i + 1))
+        ];
+      })
+  );
+
+  return cookies[name];
+}
+
+/* =========================
+   ADMIN WEB AUTH
+========================= */
+
+function adminRequired(req, res, next) {
+  const token = readCookie(req, 'boss_admin');
+
+  if (!token) {
+    return res
+      .status(401)
+      .json({ error: 'Admin login required' });
+  }
+
+  const [raw, sig] = String(token).split('.');
+
+  if (!raw || !sig) {
+    return res
+      .status(401)
+      .json({ error: 'Invalid admin session' });
+  }
+
+  const expected = crypto
+    .createHmac('sha256', SESSION_SECRET)
+    .update(raw)
+    .digest('base64url');
+
+  const actualBuffer = Buffer.from(sig);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(
+      actualBuffer,
+      expectedBuffer
+    )
+  ) {
+    return res
+      .status(401)
+      .json({ error: 'Invalid admin session' });
+  }
+
+  try {
+    const data = JSON.parse(
+      Buffer
+        .from(raw, 'base64url')
+        .toString()
+    );
+
+    if (
+      data.exp < Date.now() ||
+      data.u !== ADMIN_USER
+    ) {
+      throw new Error('Expired or invalid session');
+    }
+  } catch {
+    return res
+      .status(401)
+      .json({ error: 'Admin session expired' });
+  }
+
+  next();
+}
+
+/* =========================
+   LICENSE DATABASE
+========================= */
+
+async function getLicense(code) {
+  if (pool) {
+    const result = await pool.query(
+      'SELECT * FROM licenses WHERE code=$1',
+      [code]
+    );
+
+    return result.rows[0] || null;
+  }
+
+  return memory.licenses.get(code) || null;
+}
+
+async function saveLicense(license) {
+  if (pool) {
+    await pool.query(
+      `
+      INSERT INTO licenses (
+        code,
+        duration_days,
+        created_at,
+        activated_at,
+        expires_at,
+        revoked_at,
+        device_id
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `,
+      [
+        license.code,
+        license.duration_days,
+        license.created_at,
+        license.activated_at,
+        license.expires_at,
+        license.revoked_at,
+        license.device_id
+      ]
+    );
+
+    return;
+  }
+
+  memory.licenses.set(
+    license.code,
+    license
+  );
+}
+
+async function updateLicense(license) {
+  if (pool) {
+    await pool.query(
+      `
+      UPDATE licenses
+      SET
+        activated_at=$1,
+        expires_at=$2,
+        revoked_at=$3,
+        device_id=$4
+      WHERE code=$5
+      `,
+      [
+        license.activated_at,
+        license.expires_at,
+        license.revoked_at,
+        license.device_id,
+        license.code
+      ]
+    );
+
+    return;
+  }
+
+  memory.licenses.set(
+    license.code,
+    license
+  );
+}
+
+async function listLicenses() {
+  if (pool) {
+    const result = await pool.query(
+      'SELECT * FROM licenses ORDER BY id DESC'
+    );
+
+    return result.rows;
+  }
+
+  return [...memory.licenses.values()]
+    .sort(
+      (a, b) =>
+        new Date(b.created_at) -
+        new Date(a.created_at)
+    );
+}
+
+async function generateLicense(duration) {
+  let code;
+
+  do {
+    code = makeCode(duration);
+  } while (await getLicense(code));
+
+  const license = {
+    code,
+    duration_days: duration,
+    created_at: new Date().toISOString(),
+    activated_at: null,
+    expires_at: null,
+    revoked_at: null,
+    device_id: null
+  };
+
+  await saveLicense(license);
+
+  return license;
+}
+
+/* =========================
+   TELEGRAM BOT
+========================= */
+
+function startTelegramBot() {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.log(
+      'Telegram bot disabled: missing bot token'
+    );
+
+    return;
+  }
+
+  const bot = new TelegramBot(
+    TELEGRAM_BOT_TOKEN,
+    {
+      polling: true
+    }
+  );
+
+  /* =========================
+     ADMIN CHECK - FIXED
+  ========================= */
+
+  const isAdmin = user => {
+    const id = String(
+      user?.from?.id ??
+      user?.id ??
+      ''
+    ).trim();
+
+    return (
+      Boolean(id) &&
+      ADMIN_TELEGRAM_IDS.includes(id)
+    );
+  };
+
+  /* =========================
+     CUSTOMER MENU
+  ========================= */
+
+  const customerMenu = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: '💎 1 Day',
+            callback_data: 'buy:1'
+          },
+          {
+            text: '💎 6 Months',
+            callback_data: 'buy:180'
+          }
+        ],
+        [
+          {
+            text: '♾️ Unlimited',
+            callback_data: 'buy:0'
+          }
+        ]
+      ]
+    }
+  };
+
+  /* =========================
+     ADMIN MENU
+  ========================= */
+
+  const adminMenu = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: '🔑 Generate 1 Day',
+            callback_data: 'gen:1'
+          }
+        ],
+        [
+          {
+            text: '🔑 Generate 6 Months',
+            callback_data: 'gen:180'
+          }
+        ],
+        [
+          {
+            text: '🔑 Generate Unlimited',
+            callback_data: 'gen:0'
+          }
+        ],
+        [
+          {
+            text: '📋 Password List',
+            callback_data: 'list:all'
+          }
+        ]
+      ]
+    }
+  };
+
+  /* =========================
+     /start
+  ========================= */
+
+  bot.onText(/^\/start$/, async msg => {
+    try {
+      await bot.sendMessage(
+        msg.chat.id,
+        `👑 *BOSS X PRIME*
+
+Choose your plan.
+Contact the admin for payment and your password.`,
+        {
+          ...customerMenu,
+          parse_mode: 'Markdown'
+        }
+      );
+    } catch (error) {
+      console.error(
+        'Start command error:',
+        error
+      );
+    }
+  });
+
+  /* =========================
+     /admin
+  ========================= */
+
+  bot.onText(/^\/admin$/, async msg => {
+    try {
+      if (!isAdmin(msg)) {
+        const id = String(
+          msg?.from?.id ?? ''
+        ).trim();
+
+        return bot.sendMessage(
+          msg.chat.id,
+          `⛔ Admin only.
+
+Your Telegram ID: ${id}
+
+Set this number in Railway → Variables → ADMIN_TELEGRAM_ID, then redeploy.`
+        );
+      }
+
+      return bot.sendMessage(
+        msg.chat.id,
+        `🛠️ *BOSS X PRIME ADMIN PANEL*
+
+Choose a plan to generate a password.`,
+        {
+          ...adminMenu,
+          parse_mode: 'Markdown'
+        }
+      );
+    } catch (error) {
+      console.error(
+        'Admin command error:',
+        error
+      );
+    }
+  });
+
+  /* =========================
+     CALLBACK BUTTONS
+  ========================= */
+
+  bot.on(
+    'callback_query',
+    async q => {
+      try {
+        const data = String(
+          q.data || ''
+        );
+
+        const [action, raw] =
+          data.split(':');
+
+        const days = Number(raw);
+
+        /* ======================
+           CUSTOMER PURCHASE
+        ====================== */
+
+        if (
+          action === 'buy' &&
+          [1, 180, 0].includes(days)
+        ) {
+          const label =
+            planLabel(days);
+
+          /*
+           * FIXED:
+           * No Markdown parsing here.
+           * This prevents:
+           * "can't parse entities"
+           */
+
+          if (ADMIN_TELEGRAM_IDS[0]) {
+            await bot.sendMessage(
+              ADMIN_TELEGRAM_IDS[0],
+              `🔔 New purchase request
+
+Plan: ${label}
+Customer: ${q.from?.first_name || ''} ${q.from?.last_name || ''}
+Telegram ID: ${q.from?.id || ''}
+Username: @${q.from?.username || 'not set'}`
+            );
+          }
+
+          await bot.answerCallbackQuery(
+            q.id,
+            {
+              text: `${label} selected`
+            }
+          );
+
+          if (q.message?.chat?.id) {
+            await bot.sendMessage(
+              q.message.chat.id,
+              `✅ ${label} selected.
+
+🔐 Please contact the admin for payment and receive your password.
+
+This bot will not show "Admin only" for customer plan selection.`
+            );
+          }
+
+          return;
+        }
+
+        /* ======================
+           ADMIN GENERATE
+        ====================== */
+
+        if (
+          action === 'gen' &&
+          [1, 180, 0].includes(days)
+        ) {
+          if (!isAdmin(q)) {
+            await bot.answerCallbackQuery(
+              q.id,
+              {
+                text: '⛔ Admin only.',
+                show_alert: true
+              }
+            );
+
+            return;
+          }
+
+          const license =
+            await generateLicense(days);
+
+          await bot.answerCallbackQuery(
+            q.id,
+            {
+              text: 'Password generated'
+            }
+          );
+
+          if (!q.message?.chat?.id) {
+            return;
+          }
+
+          return bot.sendMessage(
+            q.message.chat.id,
+            `🔐 *New ${planLabel(days)} Password*
+
+\`${license.code}\`
+
+⏱️ Validity starts when the customer activates it.
+📱 Locked to the first device.`,
+            {
+              parse_mode: 'Markdown'
+            }
+          );
+        }
+
+        /* ======================
+           PASSWORD LIST
+        ====================== */
+
+        if (
+          action === 'list' &&
+          raw === 'all'
+        ) {
+          if (!isAdmin(q)) {
+            await bot.answerCallbackQuery(
+              q.id,
+              {
+                text: '⛔ Admin only.',
+                show_alert: true
+              }
+            );
+
+            return;
+          }
+
+          const licenses =
+            await listLicenses();
+
+          const listText =
+            licenses.length
+              ? licenses
+                  .slice(0, 20)
+                  .map(item => {
+                    const status =
+                      item.revoked_at
+                        ? 'Revoked'
+                        : item.activated_at
+                        ? 'Active'
+                        : 'Unused';
+
+                    return (
+                      `• \`${item.code}\` — ` +
+                      `${planLabel(
+                        item.duration_days
+                      )} — ${status}`
+                    );
+                  })
+                  .join('\n')
+              : 'No passwords yet.';
+
+          await bot.answerCallbackQuery(
+            q.id
+          );
+
+          if (!q.message?.chat?.id) {
+            return;
+          }
+
+          return bot.sendMessage(
+            q.message.chat.id,
+            `📋 *Latest passwords*
+
+${listText}`,
+            {
+              parse_mode: 'Markdown'
+            }
+          );
+        }
+
+        /* ======================
+           UNKNOWN ACTION
+        ====================== */
+
+        await bot.answerCallbackQuery(
+          q.id,
+          {
+            text: 'Unknown action',
+            show_alert: true
+          }
+        );
+      } catch (error) {
+        console.error(
+          'Telegram callback error:',
+          error
+        );
+
+        try {
+          await bot.answerCallbackQuery(
+            q.id,
+            {
+              text: 'Something went wrong',
+              show_alert: true
+            }
+          );
+        } catch {}
+      }
+    }
+  );
+
+  console.log(
+    'Telegram premium bot started'
+  );
+}
+
+/* =========================
+   PUBLIC CONFIG
+========================= */
+
+app.get(
+  '/api/config',
+  (req, res) => {
+    res.json({
+      name: 'BOSS X PRIME',
+      extensionName: 'BOSS Premium Mic',
+      activationRequired: true
+    });
+  }
+);
+
+/* =========================
+   ACTIVATION
+========================= */
+
+app.post(
+  '/api/activate',
+  async (req, res) => {
+    try {
+      const code = String(
+        req.body.code || ''
+      )
+        .trim()
+        .toUpperCase();
+
+      const deviceId = String(
+        req.body.deviceId || ''
+      )
+        .trim()
+        .slice(0, 120);
+
+      if (!code) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Enter your password'
+          });
+      }
+
+      if (!deviceId) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'This device could not be identified. Please enable browser storage and try again.'
+          });
+      }
+
+      /* ======================
+         FIXED PASSWORDS
+      ====================== */
+
+      let fixed = null;
+
+      if (
+        FIXED_PASSWORDS.oneDay &&
+        code === String(
+          FIXED_PASSWORDS.oneDay
+        )
+          .trim()
+          .toUpperCase()
+      ) {
+        fixed = {
+          duration_days: 1
+        };
+      }
+
+      if (
+        !fixed &&
+        FIXED_PASSWORDS.sixMonths &&
+        code === String(
+          FIXED_PASSWORDS.sixMonths
+        )
+          .trim()
+          .toUpperCase()
+      ) {
+        fixed = {
+          duration_days: 180
+        };
+      }
+
+      if (
+        !fixed &&
+        FIXED_PASSWORDS.unlimited &&
+        code === String(
+          FIXED_PASSWORDS.unlimited
+        )
+          .trim()
+          .toUpperCase()
+      ) {
+        fixed = {
+          duration_days: 0
+        };
+      }
+
+      let license =
+        await getLicense(code);
+
+      const isNewFixed =
+        !license &&
+        Boolean(fixed);
+
+      if (isNewFixed) {
+        license = {
+          code,
+          duration_days:
+            fixed.duration_days,
+          created_at:
+            new Date().toISOString(),
+          activated_at: null,
+          expires_at: null,
+          revoked_at: null,
+          device_id: null
+        };
+      }
+
+      if (!license) {
+        return res
+          .status(404)
+          .json({
+            error:
+              'Invalid password'
+          });
+      }
+
+      if (license.revoked_at) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'This password has been revoked'
+          });
+      }
+
+      const now = new Date();
+
+      if (
+        license.expires_at &&
+        new Date(
+          license.expires_at
+        ) <= now
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'This password has expired'
+          });
+      }
+
+      /* ======================
+         FIRST ACTIVATION
+      ====================== */
+
+      if (!license.activated_at) {
+        license.activated_at =
+          now.toISOString();
+
+        license.expires_at =
+          license.duration_days === 0
+            ? null
+            : new Date(
+                now.getTime() +
+                  license.duration_days *
+                    86400000
+              ).toISOString();
+
+        license.device_id =
+          deviceId;
+
+        if (isNewFixed) {
+          await saveLicense(
+            license
+          );
+        } else {
+          await updateLicense(
+            license
+          );
+        }
+
+      /* ======================
+         EXISTING LICENSE
+      ====================== */
+
+      } else if (
+        license.device_id &&
+        license.device_id !== deviceId
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              'This password is already activated on another device'
+          });
+      }
+
+      return res.json({
+        ok: true,
+        expiresAt:
+          license.expires_at,
+        plan: planLabel(
+          license.duration_days
+        )
+      });
+
+    } catch (error) {
+      console.error(
+        'Activation error:',
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            'Activation service error'
+        });
+    }
+  }
+);
+
+/* =========================
+   ADMIN LOGIN
+========================= */
+
+app.post(
+  '/api/admin/login',
+  (req, res) => {
+    const user = String(
+      req.body.username || ''
+    );
+
+    const pass = String(
+      req.body.password || ''
+    );
+
+    if (
+      user !== ADMIN_USER ||
+      pass !== ADMIN_PASSWORD
+    ) {
+      return res
+        .status(401)
+        .json({
+          error:
+            'Invalid admin credentials'
+        });
+    }
+
+    const payload = {
+      u: user,
+      exp:
+        Date.now() +
+        12 * 60 * 60 * 1000
+    };
+
+    res.setHeader(
+      'Set-Cookie',
+      `boss_admin=${encodeURIComponent(
+        cookieValue(payload)
+      )}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`
+    );
+
+    return res.json({
+      ok: true
+    });
+  }
+);
+
+/* =========================
+   ADMIN LOGOUT
+========================= */
+
+app.post(
+  '/api/admin/logout',
+  adminRequired,
+  (req, res) => {
+    res.setHeader(
+      'Set-Cookie',
+      'boss_admin=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0'
+    );
+
+    res.json({
+      ok: true
+    });
+  }
+);
+
+/* =========================
+   ADMIN LICENSE LIST
+========================= */
+
+app.get(
+  '/api/admin/licenses',
+  adminRequired,
+  async (req, res) => {
+    try {
+      res.json(
+        await listLicenses()
+      );
+    } catch (error) {
+      console.error(
+        'List licenses error:',
+        error
+      );
+
+      res
+        .status(500)
+        .json({
+          error:
+            'Could not load licenses'
+        });
+    }
+  }
+);
+
+/* =========================
+   ADMIN CREATE LICENSE
+========================= */
+
+app.post(
+  '/api/admin/licenses',
+  adminRequired,
+  async (req, res) => {
+    try {
+      const duration =
+        Number(
+          req.body.durationDays
+        );
+
+      if (
+        ![1, 180, 0].includes(
+          duration
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Duration mu
