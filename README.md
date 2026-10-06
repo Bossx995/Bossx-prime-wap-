@@ -6,8 +6,10 @@ Mobile-first Quetta-style web app for Railway deployment.
 - Quetta-inspired mobile UI matching the supplied screenshots
 - WhatsApp / WhatsApp Business / Add shortcuts
 - BOSS Premium Mic extension download
-- Activation gate with 1 Day, 3 Months and 6 Months passwords
+- Activation gate with 1 Day, 6 Months and Unlimited passwords
 - Password validity starts on first activation
+- Each password is locked to the first device that activates it
+- Plan buttons open Telegram directly with a pre-filled purchase message
 - One-device binding per password
 - Admin panel at `/admin`
 - Generate, view, revoke and track passwords
