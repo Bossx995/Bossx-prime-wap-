@@ -2,72 +2,168 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070707">
 <title>BOSS X PRIME</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#070707;color:#fff;font-family:Arial,sans-serif;min-height:100vh}
-.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#121212;border:1px solid #3b3000;border-radius:18px;padding:28px;box-shadow:0 15px 50px #000}
-h1{color:#ffd54a;margin-top:0}.muted{color:#aaa}.hidden{display:none}
-input,button{width:100%;padding:13px;margin:7px 0;border-radius:10px;border:1px solid #555;background:#181818;color:#fff}
-button{background:#e4b51c;color:#111;font-weight:700;border:0;cursor:pointer}.danger{background:#8b2020;color:#fff}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}.panel{padding:18px;background:#181818;border-radius:14px}
-table{width:100%;border-collapse:collapse;margin-top:15px}td,th{padding:10px;border-bottom:1px solid #333;text-align:left;font-size:13px}
-#app{min-height:65vh}.desktop{display:grid;grid-template-columns:220px 1fr;gap:18px}.side{background:#0f0f0f;border-radius:14px;padding:16px}.side button{background:#222;color:#fff;text-align:left}
-@media(max-width:700px){.desktop{grid-template-columns:1fr}.wrap{padding:12px}}
+:root{--bg:#060606;--card:#101010;--card2:#151515;--line:#292929;--gold:#f4c542;--gold2:#ffe58a;--muted:#929292;--green:#54d18a;--red:#ff6262}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 80% 0,#2a2208 0,transparent 28%),var(--bg);color:#fff;font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;min-height:100vh}
+button,input{font:inherit}
+.wrap{max-width:1180px;margin:auto;padding:18px}
+.card{background:rgba(16,16,16,.94);border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 80px #0008}
+.auth{max-width:480px;margin:6vh auto;padding:30px}
+.brand{display:flex;align-items:center;gap:13px;margin-bottom:28px}
+.logo{width:52px;height:52px;border-radius:16px;background:linear-gradient(145deg,#ffe98a,#b88a10);color:#111;display:grid;place-items:center;font-weight:950;font-size:20px;box-shadow:0 8px 30px #d6aa3040}
+.brand h1{margin:0;font-size:23px;letter-spacing:.4px}.brand small{color:var(--muted)}
+h2,h3,p{margin-top:0}.muted{color:var(--muted)}.gold{color:var(--gold)}
+input{width:100%;padding:14px 15px;margin:7px 0;border:1px solid #333;border-radius:13px;background:#0b0b0b;color:#fff;outline:none}
+input:focus{border-color:#c99f2d;box-shadow:0 0 0 3px #c99f2d18}
+button{border:0;border-radius:13px;padding:13px 15px;cursor:pointer;font-weight:800;transition:.18s}
+button:hover{transform:translateY(-1px)}.primary{background:linear-gradient(135deg,#ffe477,#c89518);color:#111;width:100%}.secondary{background:#202020;color:#fff;width:100%;border:1px solid #333}.danger{background:#641d1d;color:#fff}
+.msg{min-height:22px;font-size:13px;margin:9px 0}.hint{font-size:12px;color:#777;line-height:1.5}
+hr{border:0;border-top:1px solid #292929;margin:24px 0}
+.hidden{display:none!important}
+.desktop{display:grid;grid-template-columns:235px 1fr;min-height:72vh;overflow:hidden}
+.side{background:#0b0b0b;border-right:1px solid var(--line);padding:20px;display:flex;flex-direction:column}
+.side .brand{margin-bottom:28px}.nav{display:grid;gap:8px}.nav button{background:transparent;color:#aaa;text-align:left}.nav button.active,.nav button:hover{background:#1b1b1b;color:#fff}.nav button.active{box-shadow:inset 3px 0 var(--gold)}
+.side .foot{margin-top:auto;color:#666;font-size:11px}
+.main{padding:28px;overflow:auto}
+.top{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:24px}
+.top h2{margin:0;font-size:26px}.status{border:1px solid #254a36;background:#102218;color:var(--green);padding:8px 11px;border-radius:99px;font-size:12px;font-weight:800}
+.hero{padding:24px;border:1px solid #3c310f;background:linear-gradient(135deg,#1c1709,#101010 55%);border-radius:20px;margin-bottom:16px}
+.hero h1{font-size:30px;margin:0 0 8px}.hero p{color:#aaa;margin-bottom:0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.panel{padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--card2)}
+.panel .ico{font-size:22px;margin-bottom:12px}.panel strong{display:block;margin-bottom:5px}.panel span{font-size:12px;color:#777}
+.section{display:none}.section.active{display:block}
+.devicebox{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;color:#777;word-break:break-all;background:#0a0a0a;border:1px solid #222;border-radius:12px;padding:12px;margin-top:14px}
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}th,td{padding:12px 8px;border-bottom:1px solid #292929;text-align:left;vertical-align:middle}th{color:#888;font-weight:600}
+.badge{display:inline-block;padding:5px 8px;border-radius:99px;font-size:10px;font-weight:800}.bactive{background:#153522;color:#61db96}.bused{background:#28240e;color:#e6c954}.brev{background:#351818;color:#ff7777}
+.tablewrap{overflow:auto}
+@media(max-width:780px){
+ .wrap{padding:10px}.auth{margin:3vh auto;padding:22px}.desktop{display:block}.side{border-right:0;border-bottom:1px solid var(--line);padding:14px}.side .brand{margin-bottom:12px}.side .brand small{display:none}.nav{display:flex;overflow:auto}.nav button{white-space:nowrap;padding:10px 12px}.side .foot{display:none}.main{padding:18px}.grid{grid-template-columns:1fr}.hero h1{font-size:25px}.top{align-items:flex-start;flex-direction:column}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="card" id="login">
-    <h1>BOSS X PRIME</h1>
-    <p class="muted">Secure device access</p>
-    <button onclick="requestCode()">Request device code</button>
-    <p id="requestMsg" class="muted"></p>
-    <input id="code" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit access code">
-    <button onclick="login()">Unlock Desktop Mode</button>
-    <p id="msg"></p>
+  <div class="card auth" id="login">
+    <div class="brand">
+      <div class="logo">BX</div>
+      <div><h1>BOSS X PRIME</h1><small>Secure device access</small></div>
+    </div>
+    <h2>Welcome back</h2>
+    <p class="muted">Your device needs its own one-time access password. Request it and enter the code sent to the BOSS X Telegram bot.</p>
+    <button class="primary" onclick="requestCode()">Send access password</button>
+    <p id="requestMsg" class="msg muted"></p>
+    <input id="code" inputmode="numeric" maxlength="6" placeholder="6-digit device password" autocomplete="one-time-code">
+    <button class="secondary" onclick="login()">Login to BOSS X</button>
+    <p id="msg" class="msg"></p>
+    <div class="devicebox">Device ID: <span id="deviceText"></span></div>
     <hr>
-    <p class="muted">Admin</p>
-    <input id="adminPass" type="password" placeholder="Admin password">
-    <button onclick="adminLogin()">Open Admin Panel</button>
+    <p class="muted" style="font-size:13px">Administrator</p>
+    <input id="adminPass" type="password" placeholder="Admin password" autocomplete="current-password">
+    <button class="secondary" onclick="adminLogin()">Open Admin Panel</button>
+    <p class="hint">Each device gets its own one-time password. After successful login, that password cannot be reused. Keep your administrator password and session secret in Railway Variables, not in this page.</p>
   </div>
 
   <div class="card hidden" id="app">
     <div class="desktop">
       <aside class="side">
-        <h2>BOSS X PRIME</h2>
-        <button onclick="show('home')">Dashboard</button>
-        <button onclick="show('audio')">Audio</button>
-        <button onclick="show('about')">About</button>
+        <div class="brand"><div class="logo">BX</div><div><h1>BOSS X</h1><small>PRIME DEVICE</small></div></div>
+        <nav class="nav">
+          <button class="active" onclick="show('home',this)">⌂ Dashboard</button>
+          <button onclick="show('audio',this)">◉ Audio</button>
+          <button onclick="show('about',this)">ⓘ About</button>
+        </nav>
+        <div class="foot">BOSS X PRIME • Secure Access</div>
       </aside>
-      <main>
-        <section id="home"><h1>Desktop Mode</h1><p class="muted">Your device is authenticated.</p>
-          <div class="grid"><div class="panel">🔐 Secure Access<br><small>Device-bound code</small></div><div class="panel">🖥️ Desktop UI<br><small>Responsive layout</small></div></div>
+      <main class="main">
+        <div class="top"><h2 id="pageTitle">Dashboard</h2><div class="status">● DEVICE ACTIVE</div></div>
+
+        <section id="home" class="section active">
+          <div class="hero"><h1>BOSS X PRIME</h1><p>Your device is authenticated and ready for desktop mode.</p></div>
+          <div class="grid">
+            <div class="panel"><div class="ico">🔐</div><strong>Secure Access</strong><span>One-time device code authentication</span></div>
+            <div class="panel"><div class="ico">🖥️</div><strong>Desktop Mode</strong><span>Responsive interface for phone and desktop</span></div>
+            <div class="panel"><div class="ico">⚡</div><strong>System Ready</strong><span>Connection session is active</span></div>
+          </div>
+          <div class="panel" style="margin-top:14px"><strong>Connected device</strong><div class="devicebox" id="appDevice"></div></div>
         </section>
-        <section id="audio" class="hidden"><h1>Audio</h1><p class="muted">Add your approved audio controls here.</p></section>
-        <section id="about" class="hidden"><h1>About</h1><p class="muted">BOSS X PRIME device access system.</p></section>
+
+        <section id="audio" class="section">
+          <div class="hero"><h1>Audio</h1><p>BOSS X audio controls can be connected here without changing the access system.</p></div>
+          <div class="grid">
+            <div class="panel"><div class="ico">🎙️</div><strong>Microphone</strong><span>Ready for your approved audio interface</span></div>
+            <div class="panel"><div class="ico">🔊</div><strong>Output</strong><span>Use your device's normal audio controls</span></div>
+          </div>
+        </section>
+
+        <section id="about" class="section">
+          <div class="hero"><h1>About BOSS X</h1><p>Premium dark UI with device-bound access and server-side authentication.</p></div>
+          <div class="panel"><strong>Security note</strong><p class="muted" style="margin-top:8px">Secrets remain on the server. This page never displays the administrator password, Telegram token, or session secret.</p></div>
+        </section>
       </main>
     </div>
   </div>
 
-  <div class="card hidden" id="admin">
-    <h1>Admin Panel</h1><button onclick="loadDevices()">Refresh devices</button>
-    <div id="devices"></div>
+  <div class="card hidden" id="admin" style="padding:24px">
+    <div class="top"><div><h2>Admin Panel</h2><p class="muted">Manage BOSS X device access</p></div><button class="secondary" style="width:auto" onclick="loadDevices()">Refresh</button></div>
+    <div id="devices" class="tablewrap"></div>
   </div>
 </div>
+
 <script>
 const key="boss_x_prime_device_id";
 let deviceId=localStorage.getItem(key);
-if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(key,deviceId)}
+if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now());localStorage.setItem(key,deviceId)}
+document.getElementById("deviceText").textContent=deviceId;
+document.getElementById("appDevice").textContent=deviceId;
 
-async function api(url,opts={}){const r=await fetch(url,{headers:{"content-type":"application/json"},...opts});const d=await r.json();if(!r.ok)throw Error(d.error||"Request failed");return d}
-async function requestCode(){try{const d=await api("/api/device/request",{method:"POST",body:JSON.stringify({deviceId})});requestMsg.textContent=d.message}catch(e){requestMsg.textContent=e.message}}
-async function login(){try{await api("/api/device/login",{method:"POST",body:JSON.stringify({deviceId,code:code.value})});loginPanel(false);msg.textContent=""}catch(e){msg.textContent=e.message}}
-async function adminLogin(){try{await api("/api/admin/login",{method:"POST",body:JSON.stringify({password:adminPass.value})});document.getElementById("login").classList.add("hidden");admin.classList.remove("hidden");loadDevices()}catch(e){msg.textContent=e.message}}
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:{"content-type":"application/json"},...opts});
+  const d=await r.json();
+  if(!r.ok)throw Error(d.error||"Request failed");
+  return d;
+}
+async function requestCode(){
+  const el=document.getElementById("requestMsg");
+  try{const d=await api("/api/device/request",{method:"POST",body:JSON.stringify({deviceId})});el.textContent=d.message;el.style.color="#54d18a"}
+  catch(e){el.textContent=e.message;el.style.color="#ff7777"}
+}
+async function login(){
+  try{await api("/api/device/login",{method:"POST",body:JSON.stringify({deviceId,code:document.getElementById("code").value})});loginPanel(false)}
+  catch(e){document.getElementById("msg").textContent=e.message;document.getElementById("msg").style.color="#ff7777"}
+}
+async function adminLogin(){
+  try{await api("/api/admin/login",{method:"POST",body:JSON.stringify({password:document.getElementById("adminPass").value})});
+    document.getElementById("login").classList.add("hidden");document.getElementById("admin").classList.remove("hidden");loadDevices()
+  }catch(e){document.getElementById("msg").textContent=e.message;document.getElementById("msg").style.color="#ff7777"}
+}
 function loginPanel(v){document.getElementById("login").classList.toggle("hidden",!v);document.getElementById("app").classList.toggle("hidden",v)}
-function show(id){for(const s of ["home","audio","about"])document.getElementById(s).classList.toggle("hidden",s!==id)}
-async function loadDevices(){try{const rows=await api("/api/admin/devices");devices.innerHTML="<table><tr><th>Device</th><th>Status</th><th>Expires</th><th>Action</th></tr>"+rows.map(x=>`<tr><td>${x.device_id}</td><td>${x.revoked?"Revoked":x.used?"Used":"Active"}</td><td>${new Date(x.expires_at).toLocaleString()}</td><td>${x.revoked?"-":`<button class="danger" onclick="revoke(${x.id})">Revoke</button>`}</td></tr>`).join("")+"</table>"}catch(e){devices.textContent=e.message}}
+function show(id,btn){
+  for(const s of ["home","audio","about"])document.getElementById(s).classList.toggle("active",s===id);
+  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));if(btn)btn.classList.add("active");
+  document.getElementById("pageTitle").textContent=id[0].toUpperCase()+id.slice(1);
+}
+async function loadDevices(){
+  try{
+    const rows=await api("/api/admin/devices");
+    const html=rows.length?`<table><tr><th>Device</th><th>Status</th><th>Expires</th><th>Action</th></tr>${rows.map(x=>{
+      const status=x.revoked?'<span class="badge brev">REVOKED</span>':x.used?'<span class="badge bused">USED</span>':'<span class="badge bactive">ACTIVE</span>';
+      return `<tr><td>${x.device_id}</td><td>${status}</td><td>${new Date(x.expires_at).toLocaleString()}</td><td>${x.revoked?"—":`<button class="danger" onclick="revoke(${x.id})">Revoke</button>`}</td></tr>`
+    }).join("")}</table>`:"<p class='muted'>No devices yet.</p>";
+    document.getElementById("devices").innerHTML=html
+  }catch(e){document.getElementById("devices").textContent=e.message}
+}
 async function revoke(id){await api("/api/admin/revoke",{method:"POST",body:JSON.stringify({id})});loadDevices()}
+(async function restoreSession(){
+  try{
+    const d=await api("/api/device/me");
+    if(d.ok) loginPanel(false);
+  }catch{}
+})();
+
 </script>
 </body>
 </html>
