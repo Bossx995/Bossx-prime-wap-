@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BOSS X PRIME</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#070707;color:#fff;font-family:Arial,sans-serif;min-height:100vh}
+.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#121212;border:1px solid #3b3000;border-radius:18px;padding:28px;box-shadow:0 15px 50px #000}
+h1{color:#ffd54a;margin-top:0}.muted{color:#aaa}.hidden{display:none}
+input,button{width:100%;padding:13px;margin:7px 0;border-radius:10px;border:1px solid #555;background:#181818;color:#fff}
+button{background:#e4b51c;color:#111;font-weight:700;border:0;cursor:pointer}.danger{background:#8b2020;color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}.panel{padding:18px;background:#181818;border-radius:14px}
+table{width:100%;border-collapse:collapse;margin-top:15px}td,th{padding:10px;border-bottom:1px solid #333;text-align:left;font-size:13px}
+#app{min-height:65vh}.desktop{display:grid;grid-template-columns:220px 1fr;gap:18px}.side{background:#0f0f0f;border-radius:14px;padding:16px}.side button{background:#222;color:#fff;text-align:left}
+@media(max-width:700px){.desktop{grid-template-columns:1fr}.wrap{padding:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="login">
+    <h1>BOSS X PRIME</h1>
+    <p class="muted">Secure device access</p>
+    <button onclick="requestCode()">Request device code</button>
+    <p id="requestMsg" class="muted"></p>
+    <input id="code" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit access code">
+    <button onclick="login()">Unlock Desktop Mode</button>
+    <p id="msg"></p>
+    <hr>
+    <p class="muted">Admin</p>
+    <input id="adminPass" type="password" placeholder="Admin password">
+    <button onclick="adminLogin()">Open Admin Panel</button>
+  </div>
+
+  <div class="card hidden" id="app">
+    <div class="desktop">
+      <aside class="side">
+        <h2>BOSS X PRIME</h2>
+        <button onclick="show('home')">Dashboard</button>
+        <button onclick="show('audio')">Audio</button>
+        <button onclick="show('about')">About</button>
+      </aside>
+      <main>
+        <section id="home"><h1>Desktop Mode</h1><p class="muted">Your device is authenticated.</p>
+          <div class="grid"><div class="panel">🔐 Secure Access<br><small>Device-bound code</small></div><div class="panel">🖥️ Desktop UI<br><small>Responsive layout</small></div></div>
+        </section>
+        <section id="audio" class="hidden"><h1>Audio</h1><p class="muted">Add your approved audio controls here.</p></section>
+        <section id="about" class="hidden"><h1>About</h1><p class="muted">BOSS X PRIME device access system.</p></section>
+      </main>
+    </div>
+  </div>
+
+  <div class="card hidden" id="admin">
+    <h1>Admin Panel</h1><button onclick="loadDevices()">Refresh devices</button>
+    <div id="devices"></div>
+  </div>
+</div>
+<script>
+const key="boss_x_prime_device_id";
+let deviceId=localStorage.getItem(key);
+if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(key,deviceId)}
+
+async function api(url,opts={}){const r=await fetch(url,{headers:{"content-type":"application/json"},...opts});const d=await r.json();if(!r.ok)throw Error(d.error||"Request failed");return d}
+async function requestCode(){try{const d=await api("/api/device/request",{method:"POST",body:JSON.stringify({deviceId})});requestMsg.textContent=d.message}catch(e){requestMsg.textContent=e.message}}
+async function login(){try{await api("/api/device/login",{method:"POST",body:JSON.stringify({deviceId,code:code.value})});loginPanel(false);msg.textContent=""}catch(e){msg.textContent=e.message}}
+async function adminLogin(){try{await api("/api/admin/login",{method:"POST",body:JSON.stringify({password:adminPass.value})});document.getElementById("login").classList.add("hidden");admin.classList.remove("hidden");loadDevices()}catch(e){msg.textContent=e.message}}
+function loginPanel(v){document.getElementById("login").classList.toggle("hidden",!v);document.getElementById("app").classList.toggle("hidden",v)}
+function show(id){for(const s of ["home","audio","about"])document.getElementById(s).classList.toggle("hidden",s!==id)}
+async function loadDevices(){try{const rows=await api("/api/admin/devices");devices.innerHTML="<table><tr><th>Device</th><th>Status</th><th>Expires</th><th>Action</th></tr>"+rows.map(x=>`<tr><td>${x.device_id}</td><td>${x.revoked?"Revoked":x.used?"Used":"Active"}</td><td>${new Date(x.expires_at).toLocaleString()}</td><td>${x.revoked?"-":`<button class="danger" onclick="revoke(${x.id})">Revoke</button>`}</td></tr>`).join("")+"</table>"}catch(e){devices.textContent=e.message}}
+async function revoke(id){await api("/api/admin/revoke",{method:"POST",body:JSON.stringify({id})});loadDevices()}
+</script>
+</body>
+</html>
