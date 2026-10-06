@@ -32,6 +32,12 @@ const memory = new Map();
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// The browser extension package is intentionally not downloadable.
+app.get("/BOSS-Premium-Mic.zip", (_req, res) => {
+  res.status(404).send("Not found");
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 function randomToken(n = 8) {
