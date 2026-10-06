@@ -70,8 +70,8 @@ $("logoutDevice").addEventListener("click", () => {
   updateGate();
 });
 
-/* Power Audio web mic test. It intentionally stays inside this website.
-   The supplied extension is what connects the processed stream to WhatsApp Web. */
+/* Power Audio web mic test. The installed BOSS Premium Mic extension, when present, is separate from this page.
+   A normal webpage cannot directly attach its Web Audio graph to WhatsApp's private WebRTC call stream. */
 let audio = {ctx:null, stream:null, source:null, nodes:null, raf:null};
 
 function dbToGain(db){ return Math.pow(10, Number(db)/20); }
@@ -151,4 +151,4 @@ $("micStart").addEventListener("click", async()=>{
 window.addEventListener("beforeunload",()=>{
   audio.stream?.getTracks().forEach(t=>t.stop());
 });
-    
+      
