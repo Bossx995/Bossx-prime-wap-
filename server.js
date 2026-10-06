@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
+import TelegramBot from 'node-telegram-bot-api';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -14,6 +15,8 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'change-this-password';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-session-secret';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const ADMIN_TELEGRAM_ID = String(process.env.ADMIN_TELEGRAM_ID || '').trim();
 // Add your own activation passwords here if you want fixed passwords in the file.
 // Leave blank to use passwords generated from the Admin panel.
 const FIXED_PASSWORDS = {
@@ -81,6 +84,67 @@ async function listLicenses() {
   return [...memory.licenses.values()].sort((a,b)=>b.created_at.localeCompare(a.created_at));
 }
 
+
+async function generateLicense(duration) {
+  let code=makeCode(duration); while(await getLicense(code)) code=makeCode(duration);
+  const l={code,duration_days:duration,created_at:new Date().toISOString(),activated_at:null,expires_at:null,revoked_at:null,device_id:null};
+  await saveLicense(l); return l;
+}
+
+function planLabel(days) { return days===0?'Unlimited':days===1?'1 Day':'6 Months'; }
+
+function startTelegramBot() {
+  if (!TELEGRAM_BOT_TOKEN) return;
+  const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+  const isAdmin = msg => ADMIN_TELEGRAM_ID && String(msg.from?.id) === ADMIN_TELEGRAM_ID;
+  const customerMenu = {
+    reply_markup: { inline_keyboard: [
+      [{text:'💎 1 Day', callback_data:'buy:1'}, {text:'💎 6 Months', callback_data:'buy:180'}],
+      [{text:'♾️ Unlimited', callback_data:'buy:0'}]
+    ]}
+  };
+  const adminMenu = {
+    reply_markup: { inline_keyboard: [
+      [{text:'🔑 Generate 1 Day', callback_data:'gen:1'}],
+      [{text:'🔑 Generate 6 Months', callback_data:'gen:180'}],
+      [{text:'🔑 Generate Unlimited', callback_data:'gen:0'}],
+      [{text:'📋 Password List', callback_data:'list:all'}]
+    ]}
+  };
+  bot.onText(/^\/start$/, msg => bot.sendMessage(msg.chat.id,
+    `👑 *BOSS X PRIME*\n\nChoose the plan you want. After payment, the admin will give you a unique password.`,
+    {...customerMenu, parse_mode:'Markdown'}));
+  bot.onText(/^\/admin$/, msg => {
+    if (!isAdmin(msg)) return bot.sendMessage(msg.chat.id,'⛔ Admin only.');
+    bot.sendMessage(msg.chat.id,'🛠️ *BOSS X PRIME ADMIN PANEL*\n\nChoose a plan to generate a unique customer password.', {...adminMenu, parse_mode:'Markdown'});
+  });
+  bot.on('callback_query', async q => {
+    try {
+      const [action, raw] = String(q.data||'').split(':');
+      const days = Number(raw);
+      if (action==='buy' && [1,180,0].includes(days)) {
+        const label=planLabel(days);
+        if (ADMIN_TELEGRAM_ID) await bot.sendMessage(ADMIN_TELEGRAM_ID, `🔔 *New purchase request*\n\nPlan: *${label}*\nCustomer: ${q.from.first_name||''} ${q.from.last_name||''}\nTelegram ID: \`${q.from.id}\`\nUsername: @${q.from.username||'not set'}`, {parse_mode:'Markdown'});
+        await bot.answerCallbackQuery(q.id, {text:`${label} selected`});
+        return bot.sendMessage(q.message.chat.id, `✅ *${label} selected.*\n\nPlease contact the admin for payment and your password.`, {parse_mode:'Markdown'});
+      }
+      if (action==='gen' && [1,180,0].includes(days)) {
+        if (!isAdmin(q.message)) return bot.answerCallbackQuery(q.id,{text:'Admin only',show_alert:true});
+        const l=await generateLicense(days);
+        await bot.answerCallbackQuery(q.id,{text:'Password generated'});
+        return bot.sendMessage(q.message.chat.id, `🔐 *New ${planLabel(days)} Password*\n\n\`${l.code}\`\n\n⏱️ Validity starts when the customer activates it.\n📱 Locked to the first device.`, {parse_mode:'Markdown'});
+      }
+      if (action==='list') {
+        if (!isAdmin(q.message)) return bot.answerCallbackQuery(q.id,{text:'Admin only',show_alert:true});
+        const list=await listLicenses();
+        const text=list.length ? list.slice(0,20).map(x=>`• \`${x.code}\` — ${planLabel(x.duration_days)} — ${x.activated_at?'Active':'Unused'}${x.revoked_at?' — Revoked':''}`).join('\n') : 'No passwords yet.';
+        return bot.sendMessage(q.message.chat.id, `📋 *Latest passwords*\n\n${text}`, {parse_mode:'Markdown'});
+      }
+    } catch(e) { console.error('Telegram callback error',e); }
+  });
+  console.log('Telegram premium bot started');
+}
+
 app.get('/api/config', (req,res)=>res.json({ name:'Quetta', extensionName:'BOSS Premium Mic', activationRequired:true }));
 app.post('/api/activate', async (req,res)=>{
   try {
@@ -123,12 +187,11 @@ app.get('/api/admin/licenses',adminRequired,async(req,res)=>res.json(await listL
 app.post('/api/admin/licenses',adminRequired,async(req,res)=>{
   const duration=Number(req.body.durationDays);
   if (![1,180,0].includes(duration)) return res.status(400).json({error:'Duration must be 1, 180 or 0 (Unlimited)'});
-  let code=makeCode(duration); while(await getLicense(code)) code=makeCode(duration);
-  const l={code,duration_days:duration,created_at:new Date().toISOString(),activated_at:null,expires_at:null,revoked_at:null,device_id:null};
-  await saveLicense(l); res.json(l);
+  const l=await generateLicense(duration); res.json(l);
 });
 app.post('/api/admin/licenses/:code/revoke',adminRequired,async(req,res)=>{ const l=await getLicense(req.params.code); if(!l)return res.status(404).json({error:'Not found'}); l.revoked_at=new Date().toISOString(); await updateLicense(l); res.json({ok:true}); });
 app.get('/admin',(req,res)=>res.sendFile(path.join(__dirname,'public','admin.html')));
 app.use((req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 
-initDb().then(()=>app.listen(PORT,()=>console.log(`Quetta BOSS site running on ${PORT}`))).catch(err=>{console.error(err);process.exit(1)});
+initDb().then(()=>{ startTelegramBot(); app.listen(PORT,()=>console.log(`Quetta BOSS site running on ${PORT}`)); }).catch(err=>{console.error(err);process.exit(1)});
+    
