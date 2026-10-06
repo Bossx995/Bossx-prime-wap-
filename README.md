@@ -20,4 +20,6 @@ Mobile-first Quetta-style web app for Railway deployment.
 - `ADMIN_PASSWORD`
 - `SESSION_SECRET`
 - `DATABASE_URL` (recommended)
-- 
+
+## Telegram Admin Panel
+Set `TELEGRAM_BOT_TOKEN` and `ADMIN_TELEGRAM_ID` in Railway. The bot provides `/admin` with buttons to generate 1 Day, 6 Months and Unlimited passwords, and customers can use `/start` to request a plan.
