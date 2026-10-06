@@ -1070,4 +1070,30 @@ ${license.code}
             await bot.answerCallbackQuery(
               q.id,
               {
- 
+ async function start() {
+  try {
+    await initDb();
+
+    app.listen(
+      PORT,
+      '0.0.0.0',
+      () => {
+        console.log(
+          `BOSS X PRIME site running on port ${PORT}`
+        );
+      }
+    );
+
+    startTelegramBot();
+
+  } catch (error) {
+    console.error(
+      'Server startup error:',
+      error
+    );
+
+    process.exit(1);
+  }
+}
+
+start();
