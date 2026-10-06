@@ -127,7 +127,7 @@ async function saveLicense(license) {
     await pool.query(
       `INSERT INTO licenses
        (code, duration_days, created_at, activated_at, expires_at, revoked_at, device_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [
         license.code, license.duration_days, license.created_at,
         license.activated_at, license.expires_at, license.revoked_at,
