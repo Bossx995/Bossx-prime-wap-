@@ -1023,3 +1023,6 @@ body.desktop-mode .quickActions{
   }
 
 }
+
+/* Desktop wrapper state */
+.desktopMode.active{box-shadow:0 0 18px #00ff9d55;border-color:#00ff9d88;color:#00ff9d}
