@@ -1,0 +1,20 @@
+/* BOSS X HOME PAGE - isolated UI. License storage/logic is untouched. */
+#bossHomePage{display:none;padding:18px 18px 120px;max-width:1200px;margin:0 auto}
+#bossHomePage.bx-home-visible{display:block}
+.bxHomeShell{border:1px solid rgba(255,255,255,.10);border-radius:28px;background:rgba(10,10,14,.78);box-shadow:0 24px 80px rgba(0,0,0,.32);overflow:hidden}
+.bxHomeTop{padding:26px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid rgba(255,255,255,.08)}
+.bxHomeBrand{font-weight:900;letter-spacing:.08em}.bxHomeBrand span{display:block;font-size:11px;opacity:.58;margin-top:4px}
+.bxHomeStatus{font-size:11px;padding:8px 11px;border:1px solid rgba(255,255,255,.12);border-radius:999px;opacity:.8}
+.bxHomeShortcuts{padding:26px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.bxShortcut{min-height:126px;border:1px solid rgba(255,255,255,.10);border-radius:22px;background:rgba(255,255,255,.035);padding:17px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;cursor:pointer;transition:.18s ease}
+.bxShortcut:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.06)}
+.bxShortcutIcon{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,.08);font-weight:900;font-size:14px}
+.bxShortcutName{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bxShortcutUrl{font-size:10px;opacity:.48;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bxAddShortcut{border:1px dashed rgba(255,255,255,.22);background:transparent;align-items:center;justify-content:center;text-align:center}.bxAddShortcut .bxShortcutIcon{font-size:28px}
+.bxShortcutActions{display:flex;gap:6px}.bxMiniBtn{border:0;border-radius:9px;padding:6px 8px;background:rgba(255,255,255,.08);color:inherit;font-size:11px;cursor:pointer}.bxMiniBtn:hover{background:rgba(255,255,255,.14)}
+.bxHomePanels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:0 26px 26px}.bxHomePanel{border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:20px;background:rgba(255,255,255,.025)}.bxHomePanel h3{margin:0 0 7px}.bxHomePanel p{opacity:.65;margin:0 0 16px;font-size:13px}
+.bxHomePanel .btn{width:100%}
+.bxHomeBottom{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:12px 18px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.18)}
+.bxHomeNav{border:0;background:transparent;color:inherit;padding:11px 6px;border-radius:13px;cursor:pointer;font-size:11px;opacity:.76}.bxHomeNav:hover{background:rgba(255,255,255,.06);opacity:1}.bxHomeNav b{display:block;font-size:16px;margin-bottom:4px}
+.bxHomeModal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.72);backdrop-filter:blur(8px)}.bxHomeModal.open{display:flex}.bxHomeDialog{width:min(460px,100%);padding:24px;border-radius:24px;background:#111118;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 100px rgba(0,0,0,.5)}.bxHomeDialog h3{margin:0 0 5px}.bxHomeDialog p{font-size:12px;opacity:.6;margin:0 0 18px}.bxHomeDialog label{display:block;margin:12px 0;font-size:12px}.bxHomeDialog input{width:100%;box-sizing:border-box;margin-top:7px;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:inherit}.bxModalActions{display:flex;gap:8px;margin-top:18px}.bxModalActions button{flex:1}
+@media(max-width:700px){.bxHomeTop{padding:20px}.bxHomeShortcuts,.bxHomePanels{padding-left:16px;padding-right:16px}.bxHomePanels{grid-template-columns:1fr}.bxHomeBottom{grid-template-columns:repeat(5,1fr);padding-left:8px;padding-right:8px}}
