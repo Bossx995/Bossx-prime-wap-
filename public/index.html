@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BOSS X • BOSS X MIC PRIME</title>
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/home.css">
 </head>
 
 <body>
@@ -172,6 +173,53 @@
   </div>
 
 </section>
+
+
+<!-- BOSS X HOME PAGE: shown only after successful device activation -->
+<section id="bossHomePage" aria-label="BOSS X Home Page">
+  <div class="bxHomeShell">
+    <div class="bxHomeTop">
+      <div class="bxHomeBrand">BOSS X<span>BOSS X MIC PRIME • HOME</span></div>
+      <span class="bxHomeStatus">✓ LICENSE ACTIVE</span>
+    </div>
+
+    <div id="bxHomeShortcuts" class="bxHomeShortcuts"></div>
+
+    <div class="bxHomePanels">
+      <div class="bxHomePanel">
+        <h3>Power Audio</h3>
+        <p>Gain, Bass, Treble, Compressor, Presence and mic controls.</p>
+        <button class="btn primary" type="button" data-bx-home-target="#audio">OPEN POWER AUDIO</button>
+      </div>
+      <div class="bxHomePanel">
+        <h3>Settings</h3>
+        <p>Manage your BOSS X home shortcuts. License settings stay unchanged.</p>
+        <button class="btn ghost" type="button" data-bx-home-target="#login">LICENSE SETTINGS</button>
+      </div>
+    </div>
+
+    <div class="bxHomeBottom">
+      <button class="bxHomeNav" type="button" data-bx-home-action="back"><b>‹</b>Back</button>
+      <button class="bxHomeNav" type="button" data-bx-home-action="add"><b>＋</b>Add</button>
+      <button class="bxHomeNav" type="button" data-bx-home-target="#audio"><b>⚡</b>Power</button>
+      <button class="bxHomeNav" type="button" data-bx-home-target="#audio"><b>⌁</b>Extension</button>
+      <button class="bxHomeNav" type="button" data-bx-home-action="refresh"><b>↻</b>Refresh</button>
+    </div>
+  </div>
+</section>
+
+<div id="bxHomeModal" class="bxHomeModal" aria-hidden="true">
+  <div class="bxHomeDialog" role="dialog" aria-modal="true" aria-labelledby="bxHomeModalTitle">
+    <h3 id="bxHomeModalTitle">Add website</h3>
+    <p>Enter a website name and URL. Saved shortcuts use separate storage from the license system.</p>
+    <label>Website Name<input id="bxWebsiteName" maxlength="40" placeholder="WhatsApp"></label>
+    <label>Website URL<input id="bxWebsiteUrl" inputmode="url" placeholder="https://web.whatsapp.com/"></label>
+    <div class="bxModalActions">
+      <button id="bxCancelShortcut" class="btn ghost" type="button">CANCEL</button>
+      <button id="bxSaveShortcut" class="btn primary" type="button">SAVE</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- POWER AUDIO -->
@@ -673,6 +721,8 @@ function updateDesktopButtons(){
 updateDesktopButtons();
 
 </script>
+
+<script src="/home.js"></script>
 
 </body>
 </html>
