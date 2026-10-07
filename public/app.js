@@ -152,3 +152,24 @@ window.addEventListener("beforeunload",()=>{
   audio.stream?.getTracks().forEach(t=>t.stop());
 });
       
+
+// Desktop Mode bridge: Electron loads the bundled BOSS Premium Mic extension
+// in the same Chromium session. On the normal website these buttons keep their
+// standard web behavior.
+(() => {
+  const desktop = window.bossDesktop;
+  const openWhatsApp = () => {
+    const url = "https://web.whatsapp.com/";
+    if (desktop?.isDesktop) window.open(url, "_blank");
+    else window.open(url, "_blank", "noopener");
+  };
+  ["desktopModeBtn", "desktopModeBtn2"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (desktop?.isDesktop) {
+      el.textContent = "✓ DESKTOP MODE ACTIVE";
+      el.classList.add("active");
+    }
+    el.addEventListener("click", openWhatsApp);
+  });
+})();
