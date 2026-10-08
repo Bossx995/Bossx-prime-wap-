@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "BOSS Premium Mic",
   "short_name": "BOSS Mic",
-  "version": "1.1.0",
-  "description": "High-output microphone voice processing for WhatsApp Web with a limiter and adjustable clarity controls.",
+  "version": "1.2.0",
+  "description": "BOSS Premium Mic with an in-page three-dot WhatsApp Web control panel.",
   "permissions": [
     "storage"
   ],
@@ -20,7 +20,8 @@
       ],
       "js": [
         "content/service.js",
-        "content/loader.js"
+        "content/loader.js",
+        "content/whatsapp-panel.js"
       ],
       "run_at": "document_start"
     }
