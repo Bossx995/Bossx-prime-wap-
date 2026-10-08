@@ -15,7 +15,13 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const ADMIN_IDS = String(process.env.ADMIN_TELEGRAM_ID || "").split(",").map(s => s.trim()).filter(Boolean);
+const ADMIN_IDS = [
+  process.env.ADMIN_TELEGRAM_ID,
+  process.env.TELEGRAM_CHAT_ID,
+  process.env.TELEGRAM_CHAT_IDS
+].flatMap(value => String(value || "").split(","))
+  .map(s => s.trim())
+  .filter(Boolean);
 const BUY_URL = "https://t.me/BOSSX929";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
